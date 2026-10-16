@@ -758,10 +758,81 @@ exports.deleteCompany = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Forbidden: You cannot delete other companies.' });
     }
 
-    await query('DELETE FROM crm_companies WHERE id::text = $1', [req.params.id]);
-    await crmApiService.deleteCompany(req.params.id).catch(() => {});
-    return res.json({ success: true, message: 'Company deleted successfully' });
+    const targetId = req.params.id;
+
+    // 1. Fetch company details before deletion
+    const compRes = await query('SELECT * FROM crm_companies WHERE id::text = $1', [targetId]);
+    const company = compRes.rows[0] || null;
+    const compEmail = company?.email ? company.email.trim().toLowerCase() : null;
+    const compName = company?.name ? company.name.trim() : null;
+
+    // 2. Sync user revocation & deletion in live NexFlow CRM API so they CANNOT log in to CRM
+    try {
+      const allCrmUsersRes = await crmApiService.getCompanyUsers();
+      const crmUsers = Array.isArray(allCrmUsersRes.data)
+        ? allCrmUsersRes.data
+        : (allCrmUsersRes.data?.items || []);
+
+      for (const u of crmUsers) {
+        const uEmail = u.email ? u.email.trim().toLowerCase() : '';
+        const uCompId = u.companyId || u.company_id || null;
+
+        const isMatch = (compEmail && uEmail === compEmail) ||
+                        (targetId && String(uCompId) === String(targetId));
+
+        if (isMatch && u.id) {
+          console.log(`[CRM_DELETE] Revoking & deleting user ${uEmail} (${u.id}) in NexFlow CRM`);
+          // Deactivate first to guarantee login rejection (403), then permanently remove
+          await crmApiService.toggleCompanyUserStatus(u.id, false).catch(() => {});
+          await crmApiService.deleteCompanyUser(u.id, { permanent: true }).catch(() => {});
+        }
+      }
+
+      // Delete company workspace in NexFlow CRM
+      await crmApiService.deleteCompany(targetId).catch(() => {});
+    } catch (crmApiErr) {
+      console.warn('[CRM_API_DELETE_WARN]', crmApiErr.message);
+    }
+
+    // 3. Remove company from SuperAdmin crm_companies
+    await query('DELETE FROM crm_companies WHERE id::text = $1', [targetId]);
+
+    // 4. Remove linked organization from organizations table & clean up subscriptions/usage metrics
+    // so it NEVER appears in the Subscription selling dropdown!
+    let orgQuery = 'SELECT id FROM organizations WHERE crm_company_id = $1';
+    let orgParams = [targetId];
+    if (compEmail || compName) {
+      orgQuery = 'SELECT id FROM organizations WHERE crm_company_id = $1 OR email = $2 OR name = $3';
+      orgParams = [targetId, compEmail || '', compName || ''];
+    }
+    const matchedOrgs = await query(orgQuery, orgParams);
+
+    for (const orgRow of matchedOrgs.rows) {
+      const orgId = orgRow.id;
+      await query('DELETE FROM saas_subscriptions WHERE organization_id = $1', [orgId]);
+      await query('DELETE FROM saas_usage_metrics WHERE organization_id = $1', [orgId]);
+      await query('DELETE FROM organizations WHERE id = $1', [orgId]);
+    }
+
+    // Direct delete by crm_company_id cleanup
+    await query('DELETE FROM organizations WHERE crm_company_id = $1', [targetId]);
+
+    // 5. Deactivate & remove company admin users in SuperAdmin users table
+    if (compEmail) {
+      await query('DELETE FROM users WHERE crm_company_id = $1 OR email = $2', [targetId, compEmail]);
+    } else {
+      await query('DELETE FROM users WHERE crm_company_id = $1', [targetId]);
+    }
+
+    // 6. Delete from crm_company_users ledger
+    await query('DELETE FROM crm_company_users WHERE company_id = $1 OR email = $2', [targetId, compEmail || '']);
+
+    return res.json({
+      success: true,
+      message: `Company '${compName || targetId}' deleted successfully and CRM login access revoked.`
+    });
   } catch (err) {
+    console.error('deleteCompany error:', err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };

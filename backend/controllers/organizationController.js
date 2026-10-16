@@ -533,11 +533,50 @@ exports.deleteOrganization = async (req, res) => {
     if (orgRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Organization not found' });
 
     const org = orgRes.rows[0];
-    await query('DELETE FROM organizations WHERE id = $1', [org.id]);
+    const orgEmail = org.email ? org.email.trim().toLowerCase() : null;
+
+    // 1. Revoke and delete associated users in NexFlow CRM so they cannot log in
+    try {
+      const crmApiService = require('../services/crmApiService');
+      const allCrmUsersRes = await crmApiService.getCompanyUsers();
+      const crmUsers = Array.isArray(allCrmUsersRes.data)
+        ? allCrmUsersRes.data
+        : (allCrmUsersRes.data?.items || []);
+
+      for (const u of crmUsers) {
+        const uEmail = u.email ? u.email.trim().toLowerCase() : '';
+        const uCompId = u.companyId || u.company_id || null;
+
+        const isMatch = (orgEmail && uEmail === orgEmail) ||
+                        (org.crm_company_id && String(uCompId) === String(org.crm_company_id));
+
+        if (isMatch && u.id) {
+          console.log(`[CRM_DELETE_ORG] Revoking user ${uEmail} in NexFlow CRM`);
+          await crmApiService.toggleCompanyUserStatus(u.id, false).catch(() => {});
+          await crmApiService.deleteCompanyUser(u.id, { permanent: true }).catch(() => {});
+        }
+      }
+
+      if (org.crm_company_id) {
+        await crmApiService.deleteCompany(org.crm_company_id).catch(() => {});
+      }
+    } catch (crmErr) {
+      console.warn('CRM sync on deleteOrganization warning:', crmErr.message);
+    }
+
+    // 2. Delete local records
     await query('DELETE FROM saas_subscriptions WHERE organization_id = $1', [org.id]);
     await query('DELETE FROM saas_usage_metrics WHERE organization_id = $1', [org.id]);
+    await query('DELETE FROM organizations WHERE id = $1', [org.id]);
+
     if (org.crm_company_id) {
       await query('DELETE FROM crm_companies WHERE id::text = $1', [org.crm_company_id]);
+      await query('DELETE FROM crm_company_users WHERE company_id = $1', [org.crm_company_id]);
+      await query('DELETE FROM users WHERE crm_company_id = $1', [org.crm_company_id]);
+    }
+    if (orgEmail) {
+      await query('DELETE FROM crm_companies WHERE email = $1', [orgEmail]);
+      await query('DELETE FROM users WHERE email = $1', [orgEmail]);
     }
 
     await query(`

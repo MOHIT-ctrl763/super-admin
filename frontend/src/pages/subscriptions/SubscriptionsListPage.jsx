@@ -109,34 +109,44 @@ export function SubscriptionsListPage() {
         allOrgs = [...(orgsRes.data.items || [])];
       }
 
-      // Merge CRM companies so every single CRM company is available in dropdown
-      if (crmCompsRes.success && crmCompsRes.data) {
-        const crmList = Array.isArray(crmCompsRes.data) ? crmCompsRes.data : (crmCompsRes.data.items || []);
-        for (const c of crmList) {
-          const matchIdx = allOrgs.findIndex(o => 
-            (o.crm_company_id && String(o.crm_company_id) === String(c.id)) ||
-            (o.name && c.name && o.name.toLowerCase() === c.name.toLowerCase()) ||
-            (o.email && c.email && o.email.toLowerCase() === c.email.toLowerCase())
-          );
+      // Filter out deleted or orphaned organizations whose CRM company was deleted
+      const activeCrmList = (Array.isArray(crmCompsRes.data) ? crmCompsRes.data : (crmCompsRes.data?.items || []))
+        .filter(c => c.status !== 'DELETED');
+      const activeCrmIds = new Set(activeCrmList.map(c => String(c.id)));
 
-          if (matchIdx !== -1) {
-            allOrgs[matchIdx] = {
-              ...allOrgs[matchIdx],
-              crm_company_id: c.id,
-              crm_synced: true
-            };
-          } else {
-            allOrgs.push({
-              id: c.id,
-              name: c.name,
-              email: c.email || '',
-              phone: c.phone || '',
-              plan_name: c.plan_name || 'Standard',
-              status: c.status || 'ACTIVE',
-              crm_company_id: c.id,
-              is_crm_only: true
-            });
-          }
+      allOrgs = allOrgs.filter(o => {
+        if (o.status === 'DELETED') return false;
+        if (o.crm_company_id && !activeCrmIds.has(String(o.crm_company_id))) {
+          return false;
+        }
+        return true;
+      });
+
+      // Merge active CRM companies into organizations list
+      for (const c of activeCrmList) {
+        const matchIdx = allOrgs.findIndex(o => 
+          (o.crm_company_id && String(o.crm_company_id) === String(c.id)) ||
+          (o.name && c.name && o.name.toLowerCase() === c.name.toLowerCase()) ||
+          (o.email && c.email && o.email.toLowerCase() === c.email.toLowerCase())
+        );
+
+        if (matchIdx !== -1) {
+          allOrgs[matchIdx] = {
+            ...allOrgs[matchIdx],
+            crm_company_id: c.id,
+            crm_synced: true
+          };
+        } else {
+          allOrgs.push({
+            id: c.id,
+            name: c.name,
+            email: c.email || '',
+            phone: c.phone || '',
+            plan_name: c.plan_name || 'Standard',
+            status: c.status || 'ACTIVE',
+            crm_company_id: c.id,
+            is_crm_only: true
+          });
         }
       }
 

@@ -383,8 +383,9 @@ class CrmApiService {
   /**
    * Delete company user via DELETE /auth/company-user/delete/:id
    */
-  async deleteCompanyUser(id) {
-    return this.request(`/auth/company-user/delete/${id}`, {
+  async deleteCompanyUser(id, options = {}) {
+    const permQuery = options.permanent ? '?permanent=true' : '';
+    return this.request(`/auth/company-user/delete/${id}${permQuery}`, {
       method: 'DELETE'
     });
   }
@@ -395,7 +396,7 @@ class CrmApiService {
   async toggleCompanyUserStatus(id, isActive) {
     return this.request(`/auth/company-user/${id}/active`, {
       method: 'PATCH',
-      body: { isActive: !!isActive }
+      body: { is_active: !!isActive, isActive: !!isActive }
     });
   }
 
