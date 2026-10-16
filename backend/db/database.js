@@ -320,32 +320,6 @@ async function seedData() {
       INSERT INTO users (name, email, password, phone, role_name, role_display_name, is_active, last_login)
       VALUES ($1, $2, $3, $4, $5, $6, true, CURRENT_TIMESTAMP)
     `, ['Mohit (Super Admin)', 'mohitpoewal12@gmail.com', passwordHash, '+91 9999999999', 'SUPER_ADMIN', 'Super Administrator']);
-
-    // Demo Tenant Admins
-    await query(`
-      INSERT INTO users (name, email, password, phone, role_name, role_display_name, is_active, organization_id, organization_name, last_login)
-      VALUES 
-      ($1, $2, $3, $4, 'ORG_ADMIN', 'Organization Admin', true, 1, 'Solaris Cloud Solutions', CURRENT_TIMESTAMP),
-      ($5, $6, $7, $8, 'ORG_ADMIN', 'Organization Admin', true, 2, 'Vanguard Engineering', CURRENT_TIMESTAMP),
-      ($9, $10, $11, $12, 'ORG_ADMIN', 'Organization Admin', true, 3, 'NexGen Robotics', CURRENT_TIMESTAMP)
-    `, [
-      'Alex Rivera', 'alex@solariscloud.in', passwordHash, '+91 98111 22334',
-      'Sarah Jenkins', 'supply@vanguardeng.in', passwordHash, '+91 98222 33445',
-      'David Zhang', 'orders@nexgenrobotics.com', passwordHash, '+91 98333 44556'
-    ]);
-  }
-
-  const orgsRes = await query('SELECT COUNT(*) as count FROM organizations');
-  if (parseInt(orgsRes.rows[0].count, 10) === 0) {
-    await query(`
-      INSERT INTO organizations (name, slug, email, phone, city, state, status, plan_id, plan_name, owner_name, users_count)
-      VALUES 
-      ('Solaris Cloud Solutions', 'solaris-cloud', 'billing@solariscloud.in', '+91 98111 22334', 'Bengaluru', 'Karnataka', 'ACTIVE', 2, 'Pro', 'Alex Rivera', 1),
-      ('Vanguard Engineering', 'vanguard-eng', 'supply@vanguardeng.in', '+91 98222 33445', 'Pune', 'Maharashtra', 'ACTIVE', 1, 'Basic', 'Sarah Jenkins', 1),
-      ('NexGen Robotics', 'nexgen-robotics', 'orders@nexgenrobotics.com', '+91 98333 44556', 'Hyderabad', 'Telangana', 'ACTIVE', 2, 'Pro', 'David Zhang', 1),
-      ('Zenith Logistics', 'zenith-logistics', 'admin@zenithlog.com', '+91 98444 55667', 'Mumbai', 'Maharashtra', 'ACTIVE', 3, 'Enterprise', 'Priya Sharma', 1),
-      ('Apex Auto Tech', 'apex-tech', 'procurement@apexauto.in', '+91 98555 66778', 'Chennai', 'Tamil Nadu', 'ACTIVE', 2, 'Pro', 'Karan Mehta', 6)
-    `);
   }
 
   const plansRes = await query('SELECT COUNT(*) as count FROM saas_plans');
@@ -375,33 +349,6 @@ async function seedData() {
     `);
   }
 
-  const subsRes = await query('SELECT COUNT(*) as count FROM saas_subscriptions');
-  if (parseInt(subsRes.rows[0].count, 10) === 0) {
-    await query(`
-      INSERT INTO saas_subscriptions (organization_id, organization_name, plan_id, plan_name, billing_cycle, amount, status, current_period_end)
-      VALUES 
-      (10, 'ajay', 1, 'Basic Plan', 'MONTHLY', 29, 'ACTIVE', CURRENT_TIMESTAMP + INTERVAL '30 days')
-    `);
-  }
-
-  const invsRes = await query('SELECT COUNT(*) as count FROM saas_invoices');
-  if (parseInt(invsRes.rows[0].count, 10) === 0) {
-    await query(`
-      INSERT INTO saas_invoices (invoice_number, organization_id, organization_name, plan_name, amount, currency, status, billing_period, due_date, paid_at)
-      VALUES 
-      ('INV-10-1385', 10, 'ajay', 'Basic Plan', 29, 'INR', 'PAID', 'Monthly Plan', CURRENT_TIMESTAMP + INTERVAL '7 days', CURRENT_TIMESTAMP)
-    `);
-  }
-
-  const paysRes = await query('SELECT COUNT(*) as count FROM saas_payments');
-  if (parseInt(paysRes.rows[0].count, 10) === 0) {
-    await query(`
-      INSERT INTO saas_payments (payment_id, organization_id, organization_name, amount, currency, method, status)
-      VALUES 
-      ('TXN-682755', 10, 'ajay', 29, 'INR', 'UPI', 'SUCCESS')
-    `);
-  }
-
   const coupsRes = await query('SELECT COUNT(*) as count FROM saas_coupons');
   if (parseInt(coupsRes.rows[0].count, 10) === 0) {
     await query(`
@@ -411,21 +358,6 @@ async function seedData() {
       ('LAUNCH20', 'PERCENTAGE', 20, 200, 12, true, CURRENT_TIMESTAMP + INTERVAL '60 days'),
       ('FLAT100', 'FIXED', 100, 100, 8, true, CURRENT_TIMESTAMP + INTERVAL '90 days'),
       ('VIPGROWTH', 'PERCENTAGE', 30, 50, 5, true, CURRENT_TIMESTAMP + INTERVAL '30 days')
-    `);
-  }
-
-  const usageRes = await query('SELECT COUNT(*) as count FROM saas_usage_metrics');
-  if (parseInt(usageRes.rows[0].count, 10) === 0) {
-    await query(`
-      INSERT INTO saas_usage_metrics (organization_id, organization_name, metric_name, current_value, max_limit, unit)
-      VALUES 
-      (1, 'Solaris Cloud Solutions', 'storage_gb', 8.4, 50, 'GB'),
-      (1, 'Solaris Cloud Solutions', 'api_calls', 14200, 100000, 'calls'),
-      (1, 'Solaris Cloud Solutions', 'active_users', 1, 25, 'users'),
-      (2, 'Vanguard Engineering', 'storage_gb', 2.1, 10, 'GB'),
-      (3, 'NexGen Robotics', 'storage_gb', 12.8, 50, 'GB'),
-      (4, 'Zenith Logistics', 'storage_gb', 45.2, 500, 'GB'),
-      (5, 'Apex Auto Tech', 'storage_gb', 24.6, 50, 'GB')
     `);
   }
 
