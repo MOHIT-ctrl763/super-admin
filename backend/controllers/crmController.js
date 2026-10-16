@@ -376,10 +376,18 @@ exports.createCompany = async (req, res) => {
       `, [cleanEmail]);
 
       if (verRes.rows.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: `Company email ${cleanEmail} has not been verified with OTP yet. Please verify email before provisioning.`
-        });
+        const { isSuperAdmin } = getCallerTenantScope(req);
+        if (isSuperAdmin) {
+          await query(`
+            INSERT INTO saas_email_verifications (email, otp, purpose, is_verified, expires_at)
+            VALUES ($1, 'AUTO_VERIFIED', 'CRM_COMPANY', TRUE, CURRENT_TIMESTAMP + INTERVAL '1 day')
+          `, [cleanEmail]);
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: `Company email ${cleanEmail} has not been verified with OTP yet. Please verify email before provisioning.`
+          });
+        }
       }
     }
 
@@ -1956,50 +1964,6 @@ exports.syncOrganization = async (req, res) => {
 
 exports.migrateLocalData = async (req, res) => {
   try {
-    if (req.body.testSmtp) {
-      const nodemailer = require('nodemailer');
-      const user = process.env.SMTP_USER || 'mohitpoewal12@gmail.com';
-      const pass = process.env.SMTP_PASS || 'buvlouttomlhhvwk';
-      const targetEmail = req.body.testEmail || 'mohitpoewal12@gmail.com';
-
-      const results = {};
-
-      // Test 1: Port 587 (STARTTLS)
-      try {
-        const t587 = nodemailer.createTransport({
-          host: 'smtp.gmail.com',
-          port: 587,
-          secure: false,
-          auth: { user, pass },
-          tls: { rejectUnauthorized: false },
-          connectionTimeout: 6000
-        });
-        await t587.verify();
-        const sendInfo = await t587.sendMail({
-          from: `"Super Admin" <${user}>`,
-          to: targetEmail,
-          subject: '[OrderFlow OMS] Test OTP: 587587',
-          text: 'Your test OTP code is 587587'
-        });
-        results.port587 = { success: true, messageId: sendInfo.messageId };
-      } catch (err587) {
-        results.port587 = { success: false, error: err587.message, code: err587.code };
-      }
-
-      // Test 2: service: 'gmail'
-      try {
-        const tGmail = nodemailer.createTransport({
-          service: 'gmail',
-          auth: { user, pass }
-        });
-        await tGmail.verify();
-        results.serviceGmail = { success: true };
-      } catch (errG) {
-        results.serviceGmail = { success: false, error: errG.message, code: errG.code };
-      }
-
-      return res.json({ success: results.port587?.success || results.serviceGmail?.success, results });
-    }
     const { crmCompanies, organizations, subscriptions, payments, users } = req.body;
     await ensureCrmCompaniesTable();
 

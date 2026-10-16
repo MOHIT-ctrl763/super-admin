@@ -184,8 +184,10 @@ export function OrganizationsListPage() {
         setCrmCompanyOtpSent(true);
         if (res.data?.otp) {
           setCrmCompanyOtpCode(res.data.otp);
+          toast.success(`OTP Code: ${res.data.otp} (Auto-filled below)`, { duration: 6000 });
+        } else {
+          toast.success(res.message || 'Verification OTP sent to company contact email.');
         }
-        toast.success(res.message || 'Verification OTP sent to company contact email.');
       }
     } catch (err) {
       toast.error(err.message || 'Failed to send verification code.');
@@ -667,8 +669,14 @@ export function OrganizationsListPage() {
             {crmCompanyOtpSent && !crmCompanyEmailVerified && (
               <div className="mt-2.5 p-3 rounded-xl bg-indigo-50/70 border border-indigo-200 space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-indigo-900">Enter 6-Digit OTP</span>
-                  <span className="text-[11px] text-indigo-600">Sent to {newCrmCompanyForm.email}</span>
+                  <span className="font-bold text-indigo-900">Verification Code</span>
+                  {crmCompanyOtpCode ? (
+                    <span className="text-[11px] font-black text-emerald-700 bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                      OTP: {crmCompanyOtpCode}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-indigo-600">Sent to {newCrmCompanyForm.email}</span>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <input

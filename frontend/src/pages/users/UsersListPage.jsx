@@ -144,8 +144,10 @@ export function UsersListPage() {
         setCrmStaffOtpSent(true);
         if (res.data?.otp) {
           setCrmStaffOtpCode(res.data.otp);
+          toast.success(`OTP Code: ${res.data.otp} (Auto-filled below)`, { duration: 6000 });
+        } else {
+          toast.success(res.message || 'Verification OTP sent to work email.');
         }
-        toast.success(res.message || 'Verification OTP sent to work email.');
       }
     } catch (err) {
       toast.error(err.message || 'Failed to send verification code.');

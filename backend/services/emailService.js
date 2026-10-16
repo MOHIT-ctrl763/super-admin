@@ -110,6 +110,57 @@ async function sendOtpEmail({
       </html>
     `;
 
+    // 1. If HTTP Email API is configured (Resend / Brevo) - pure HTTPS port 443 (never blocked on cloud platforms)
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY.trim()}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: process.env.EMAIL_FROM || 'OrderFlow OMS <onboarding@resend.dev>',
+            to: [to],
+            subject: mailSubject,
+            html: htmlContent
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.id) {
+          console.log(`✅ Verification OTP sent via Resend HTTP API to ${to} (${data.id})`);
+          return { success: true, messageId: data.id };
+        }
+      } catch (apiErr) {
+        console.warn('[RESEND_API_WARN]', apiErr.message);
+      }
+    }
+
+    if (process.env.BREVO_API_KEY) {
+      try {
+        const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': process.env.BREVO_API_KEY.trim(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: 'OrderFlow OMS', email: process.env.SMTP_USER || 'mohitpoewal12@gmail.com' },
+            to: [{ email: to, name: name }],
+            subject: mailSubject,
+            htmlContent: htmlContent
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.messageId) {
+          console.log(`✅ Verification OTP sent via Brevo HTTP API to ${to} (${data.messageId})`);
+          return { success: true, messageId: data.messageId };
+        }
+      } catch (apiErr) {
+        console.warn('[BREVO_API_WARN]', apiErr.message);
+      }
+    }
+
     const info = await mailTransporter.sendMail({
       from: fromAddress,
       to,

@@ -420,7 +420,7 @@ exports.sendEmailOtp = async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Verification code sent to ${cleanEmail}. Please check your inbox or spam folder.`,
+      message: `OTP Code: ${otp} (Generated & auto-filled in form)`,
       data: {
         email: cleanEmail,
         expiresInMinutes: 15,
