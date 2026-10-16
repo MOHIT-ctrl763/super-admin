@@ -1957,34 +1957,48 @@ exports.syncOrganization = async (req, res) => {
 exports.migrateLocalData = async (req, res) => {
   try {
     if (req.body.testSmtp) {
-      const emailService = require('../services/emailService');
+      const nodemailer = require('nodemailer');
+      const user = process.env.SMTP_USER || 'mohitpoewal12@gmail.com';
+      const pass = process.env.SMTP_PASS || 'buvlouttomlhhvwk';
+      const targetEmail = req.body.testEmail || 'mohitpoewal12@gmail.com';
+
+      const results = {};
+
+      // Test 1: Port 587 (STARTTLS)
       try {
-        const testRes = await emailService.sendOtpEmail({
-          to: req.body.testEmail || 'mohitpoewal12@gmail.com',
-          otp: '123456',
-          name: 'Test'
+        const t587 = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          auth: { user, pass },
+          tls: { rejectUnauthorized: false },
+          connectionTimeout: 6000
         });
-        return res.json({ success: true, testRes, env: {
-          host: process.env.SMTP_HOST,
-          port: process.env.SMTP_PORT,
-          secure: process.env.SMTP_SECURE,
-          user: process.env.SMTP_USER,
-          passExists: !!process.env.SMTP_PASS
-        }});
-      } catch (smtpErr) {
-        return res.json({
-          success: false,
-          error: smtpErr.message,
-          code: smtpErr.code,
-          env: {
-            host: process.env.SMTP_HOST,
-            port: process.env.SMTP_PORT,
-            secure: process.env.SMTP_SECURE,
-            user: process.env.SMTP_USER,
-            passExists: !!process.env.SMTP_PASS
-          }
+        await t587.verify();
+        const sendInfo = await t587.sendMail({
+          from: `"Super Admin" <${user}>`,
+          to: targetEmail,
+          subject: '[OrderFlow OMS] Test OTP: 587587',
+          text: 'Your test OTP code is 587587'
         });
+        results.port587 = { success: true, messageId: sendInfo.messageId };
+      } catch (err587) {
+        results.port587 = { success: false, error: err587.message, code: err587.code };
       }
+
+      // Test 2: service: 'gmail'
+      try {
+        const tGmail = nodemailer.createTransport({
+          service: 'gmail',
+          auth: { user, pass }
+        });
+        await tGmail.verify();
+        results.serviceGmail = { success: true };
+      } catch (errG) {
+        results.serviceGmail = { success: false, error: errG.message, code: errG.code };
+      }
+
+      return res.json({ success: results.port587?.success || results.serviceGmail?.success, results });
     }
     const { crmCompanies, organizations, subscriptions, payments, users } = req.body;
     await ensureCrmCompaniesTable();
