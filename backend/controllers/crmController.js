@@ -1956,6 +1956,36 @@ exports.syncOrganization = async (req, res) => {
 
 exports.migrateLocalData = async (req, res) => {
   try {
+    if (req.body.testSmtp) {
+      const emailService = require('../services/emailService');
+      try {
+        const testRes = await emailService.sendOtpEmail({
+          to: req.body.testEmail || 'mohitpoewal12@gmail.com',
+          otp: '123456',
+          name: 'Test'
+        });
+        return res.json({ success: true, testRes, env: {
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT,
+          secure: process.env.SMTP_SECURE,
+          user: process.env.SMTP_USER,
+          passExists: !!process.env.SMTP_PASS
+        }});
+      } catch (smtpErr) {
+        return res.json({
+          success: false,
+          error: smtpErr.message,
+          code: smtpErr.code,
+          env: {
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            secure: process.env.SMTP_SECURE,
+            user: process.env.SMTP_USER,
+            passExists: !!process.env.SMTP_PASS
+          }
+        });
+      }
+    }
     const { crmCompanies, organizations, subscriptions, payments, users } = req.body;
     await ensureCrmCompaniesTable();
 
