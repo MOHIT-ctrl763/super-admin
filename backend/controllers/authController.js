@@ -43,6 +43,7 @@ exports.login = async (req, res) => {
     }
 
     const isSuperAdmin = userRoles.some(r => r.slug === 'super_admin') || user.role_name === 'SUPER_ADMIN';
+    const isPlatformUser = isSuperAdmin || !user.organization_id || userRoles.some(r => ['super_admin', 'finance_role', 'finance_admin', 'support_role', 'support_admin', 'sales_role', 'sales_admin'].includes(r.slug)) || ['SUPER_ADMIN', 'FINANCE_ROLE', 'FINANCE', 'SUPPORT_ROLE', 'SUPPORT', 'SALES_ROLE', 'SALES'].includes(user.role_name);
     const permissions = await getUserPermissions(user.id);
 
     // Update last login
@@ -52,7 +53,7 @@ exports.login = async (req, res) => {
     await query(`
       INSERT INTO audit_logs (user_id, user_name, action, module, details, ip_address)
       VALUES ($1, $2, 'AUTH_LOGIN', 'AUTH', $3, $4)
-    `, [user.id, user.name, `${isSuperAdmin ? 'Super Administrator' : (user.organization_name ? `${user.organization_name} Admin` : 'User')} logged in`, req.ip || '127.0.0.1']);
+    `, [user.id, user.name, `${isSuperAdmin ? 'Super Administrator' : (isPlatformUser ? userRoles[0]?.name || 'Platform Staff' : (user.organization_name ? `${user.organization_name} Admin` : 'User'))} logged in`, req.ip || '127.0.0.1']);
 
     const token = jwt.sign(
       {
@@ -61,8 +62,9 @@ exports.login = async (req, res) => {
         name: user.name,
         role: isSuperAdmin ? 'super_admin' : (userRoles[0]?.slug || 'company_admin'),
         role_name: user.role_name,
-        role_display_name: isSuperAdmin ? 'Super Administrator' : (user.role_display_name || 'Company Administrator'),
+        role_display_name: isSuperAdmin ? 'Super Administrator' : (user.role_display_name || userRoles[0]?.name || (isPlatformUser ? 'SaaS Platform Staff' : 'Company Administrator')),
         isSuperAdmin,
+        isPlatformUser,
         organization_id: user.organization_id || null,
         organization_name: user.organization_name || null,
         crm_company_id: user.crm_company_id || null
@@ -83,11 +85,12 @@ exports.login = async (req, res) => {
           phone: user.phone,
           role: isSuperAdmin ? 'super_admin' : (userRoles[0]?.slug || 'company_admin'),
           role_name: user.role_name,
-          roleDisplayName: isSuperAdmin ? 'Super Administrator' : (user.role_display_name || userRoles[0]?.name || 'Company Administrator'),
+          roleDisplayName: isSuperAdmin ? 'Super Administrator' : (user.role_display_name || userRoles[0]?.name || (isPlatformUser ? 'SaaS Platform Staff' : 'Company Administrator')),
           organizationId: user.organization_id || null,
           organizationName: user.organization_name || null,
           crmCompanyId: user.crm_company_id || null,
           isSuperAdmin,
+          isPlatformUser,
           roles: userRoles,
           permissions
         }
@@ -113,6 +116,7 @@ exports.getMe = async (req, res) => {
     const user = result.rows[0];
     const userRoles = await getUserRoles(user.id);
     const isSuperAdmin = userRoles.some(r => r.slug === 'super_admin') || user.role_name === 'SUPER_ADMIN';
+    const isPlatformUser = isSuperAdmin || !user.organization_id || userRoles.some(r => ['super_admin', 'finance_role', 'finance_admin', 'support_role', 'support_admin', 'sales_role', 'sales_admin'].includes(r.slug)) || ['SUPER_ADMIN', 'FINANCE_ROLE', 'FINANCE', 'SUPPORT_ROLE', 'SUPPORT', 'SALES_ROLE', 'SALES'].includes(user.role_name);
     const permissions = await getUserPermissions(user.id);
 
     return res.json({
@@ -124,11 +128,12 @@ exports.getMe = async (req, res) => {
         phone: user.phone,
         role: isSuperAdmin ? 'super_admin' : (userRoles[0]?.slug || 'company_admin'),
         role_name: user.role_name,
-        roleDisplayName: isSuperAdmin ? 'Super Administrator' : (user.role_display_name || userRoles[0]?.name || 'Company Administrator'),
+        roleDisplayName: isSuperAdmin ? 'Super Administrator' : (user.role_display_name || userRoles[0]?.name || (isPlatformUser ? 'SaaS Platform Staff' : 'Company Administrator')),
         organizationId: user.organization_id || null,
         organizationName: user.organization_name || null,
         crmCompanyId: user.crm_company_id || null,
         isSuperAdmin,
+        isPlatformUser,
         roles: userRoles,
         permissions,
         lastLogin: user.last_login

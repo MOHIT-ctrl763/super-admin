@@ -32,7 +32,7 @@ const NAV_GROUPS = [
     category: 'MAIN',
     items: [
       { path: '/super-admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'dashboard.view' },
-      { path: '/super-admin/analytics', label: 'Revenue Analytics', icon: TrendingUp, permission: 'dashboard.view' }
+      { path: '/super-admin/analytics', label: 'Revenue Analytics', icon: TrendingUp, permission: 'payments.view' }
     ]
   },
   {

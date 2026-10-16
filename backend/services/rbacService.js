@@ -104,30 +104,31 @@ const DEFAULT_ROLES_CONFIG = [
   {
     name: 'Super Admin',
     slug: 'super_admin',
-    description: 'Full platform access with unrestricted administrative privileges over all modules, roles, and settings.',
+    description: 'Full unrestricted platform access over all SaaS modules, billing, tenant companies, access control, and settings.',
     is_system: true,
     // Super Admin gets all permissions
     permissions: PERMISSIONS_LIST.map(p => p.code)
   },
   {
-    name: 'Finance Admin',
-    slug: 'finance_admin',
-    description: 'Manages plans, subscriptions, payments, invoices, coupons, and trial periods.',
+    name: 'Finance Role',
+    slug: 'finance_role',
+    description: 'Manages SaaS plans, subscriptions, payments, invoices, billing reconciliation, coupons, and financial analytics.',
     is_system: true,
     permissions: [
       'dashboard.view',
+      'organizations.view',
       'plans.view', 'plans.create', 'plans.update',
       'subscriptions.view', 'subscriptions.create', 'subscriptions.update', 'subscriptions.cancel', 'subscriptions.renew',
       'payments.view', 'payments.refund', 'payments.export',
       'invoices.view', 'invoices.create', 'invoices.update', 'invoices.download', 'invoices.export',
       'coupons.view', 'coupons.create', 'coupons.update', 'coupons.delete',
-      'trials.view', 'trials.create', 'trials.update', 'trials.cancel'
+      'trials.view', 'trials.update'
     ]
   },
   {
-    name: 'Support Admin',
-    slug: 'support_admin',
-    description: 'Handles customer assistance, support tickets, user inquiries, broadcasts, and inspects audit trails.',
+    name: 'Support Role',
+    slug: 'support_role',
+    description: 'Assists tenant companies, manages customer support tickets, unlocks accounts, inspects usage quotas and audit compliance logs.',
     is_system: true,
     permissions: [
       'dashboard.view',
@@ -135,34 +136,22 @@ const DEFAULT_ROLES_CONFIG = [
       'users.view', 'users.update', 'users.suspend',
       'support.view', 'support.create', 'support.update', 'support.resolve',
       'notifications.view', 'notifications.create', 'notifications.update', 'notifications.send',
+      'usage.view', 'usage.export',
       'auditLogs.view'
     ]
   },
   {
-    name: 'Sales Admin',
-    slug: 'sales_admin',
-    description: 'Manages business accounts, tenant onboarding, subscription conversions, and trial extensions.',
+    name: 'Sales Role',
+    slug: 'sales_role',
+    description: 'Handles client acquisition, onboards new tenant companies, sells CRM subscriptions, and manages free trial evaluations.',
     is_system: true,
     permissions: [
       'dashboard.view',
       'organizations.view', 'organizations.create', 'organizations.update',
       'plans.view',
       'subscriptions.view', 'subscriptions.create', 'subscriptions.update', 'subscriptions.renew',
-      'trials.view', 'trials.create', 'trials.update'
-    ]
-  },
-  {
-    name: 'Operations Admin',
-    slug: 'operations_admin',
-    description: 'Monitors platform feature catalog, tenant resource usage limits, and compliance logs.',
-    is_system: true,
-    permissions: [
-      'dashboard.view',
-      'organizations.view', 'organizations.update', 'organizations.suspend',
-      'features.view', 'features.create', 'features.update', 'features.activate', 'features.deactivate',
-      'usage.view', 'usage.export',
-      'notifications.view', 'notifications.create', 'notifications.send',
-      'auditLogs.view', 'auditLogs.export'
+      'trials.view', 'trials.create', 'trials.update',
+      'invoices.view', 'invoices.download'
     ]
   },
   {

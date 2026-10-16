@@ -15,7 +15,7 @@ exports.getUsers = async (req, res) => {
     const params = [];
     let pIdx = 1;
 
-    if (!req.user?.isSuperAdmin) {
+    if (!req.user?.isSuperAdmin && req.user?.organization_id) {
       const orgId = req.user?.organization_id || 0;
       const compId = req.user?.crm_company_id || '0';
       const myId = req.user?.id || 0;
@@ -124,16 +124,22 @@ exports.createUser = async (req, res) => {
       });
     }
 
+    const assignedRole = roleName || (typeof roleId === 'string' ? roleId : null) || (organizationId ? 'ORG_ADMIN' : 'SUPER_ADMIN');
+    const isPlatformRole = ['SUPER_ADMIN', 'FINANCE_ROLE', 'SUPPORT_ROLE', 'SALES_ROLE', 'super_admin', 'finance_role', 'support_role', 'sales_role', 'finance_admin', 'support_admin', 'sales_admin'].includes(assignedRole);
+
     let orgName = null;
-    if (organizationId) {
-      const orgRes = await query('SELECT name FROM organizations WHERE id = $1', [organizationId]);
+    let finalOrgId = isPlatformRole ? null : (organizationId ? parseInt(organizationId, 10) : null);
+    if (finalOrgId) {
+      const orgRes = await query('SELECT name FROM organizations WHERE id = $1', [finalOrgId]);
       if (orgRes.rows.length > 0) orgName = orgRes.rows[0].name;
     }
 
-    const assignedRole = roleName || (typeof roleId === 'string' ? roleId : null) || (organizationId ? 'ORG_ADMIN' : 'SUPER_ADMIN');
     let roleDisplay = 'Organization Admin';
-    if (assignedRole === 'SUPER_ADMIN') roleDisplay = 'Super Administrator';
-    else if (assignedRole === 'ORG_ADMIN') roleDisplay = 'Organization Admin';
+    if (assignedRole === 'SUPER_ADMIN' || assignedRole === 'super_admin') roleDisplay = 'Super Administrator';
+    else if (assignedRole === 'FINANCE_ROLE' || assignedRole === 'finance_role' || assignedRole === 'finance_admin') roleDisplay = 'Finance Role';
+    else if (assignedRole === 'SUPPORT_ROLE' || assignedRole === 'support_role' || assignedRole === 'support_admin') roleDisplay = 'Support Role';
+    else if (assignedRole === 'SALES_ROLE' || assignedRole === 'sales_role' || assignedRole === 'sales_admin') roleDisplay = 'Sales Role';
+    else if (assignedRole === 'ORG_ADMIN' || assignedRole === 'COMPANY_ADMIN') roleDisplay = 'Organization Admin';
     else if (assignedRole === 'ORG_MEMBER') roleDisplay = 'Organization Member';
     else roleDisplay = assignedRole;
 
@@ -147,18 +153,22 @@ exports.createUser = async (req, res) => {
     const cleanPhone = phone ? String(phone).replace(/\D/g, '').slice(0, 10) : '';
 
     const result = await query(`
-      INSERT INTO users (name, email, password, phone, role_name, role_display_name, is_active, organization_id, organization_name)
-      VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8)
+      INSERT INTO users (name, email, password, phone, role_name, role_display_name, is_active, organization_id, organization_name, crm_company_id)
+      VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, NULL)
       RETURNING id, name, email, role_name, role_display_name, organization_name
-    `, [name, cleanEmail, hash, cleanPhone, assignedRole, roleDisplay, organizationId || null, orgName]);
+    `, [name, cleanEmail, hash, cleanPhone, assignedRole, roleDisplay, finalOrgId, orgName]);
 
     const newUser = result.rows[0];
 
     // Assign RBAC roles if provided or default platform role
     let targetRoleIds = Array.isArray(roleIds) ? roleIds : [];
-    if (targetRoleIds.length === 0 && !organizationId) {
+    if (targetRoleIds.length === 0 && !finalOrgId) {
       // Find matching role in roles table
-      const matchedRole = await query('SELECT id FROM roles WHERE slug = $1 OR name ILIKE $2', [assignedRole.toLowerCase(), assignedRole]);
+      const matchedRole = await query(`
+        SELECT id FROM roles 
+        WHERE slug = $1 OR slug = $2 OR name ILIKE $3 OR slug ILIKE $4
+        LIMIT 1
+      `, [assignedRole.toLowerCase(), assignedRole.toLowerCase().replace(/_role$/, '_admin'), assignedRole, `%${assignedRole}%`]);
       if (matchedRole.rows.length > 0) {
         targetRoleIds = [matchedRole.rows[0].id];
       }
@@ -189,16 +199,22 @@ exports.updateUser = async (req, res) => {
     const userId = parseInt(req.params.id, 10);
     const { name, email, phone, roleName, roleId, roleIds, organizationId } = req.body;
 
+    const assignedRole = roleName || (typeof roleId === 'string' ? roleId : null) || (organizationId ? 'ORG_ADMIN' : 'SUPER_ADMIN');
+    const isPlatformRole = ['SUPER_ADMIN', 'FINANCE_ROLE', 'SUPPORT_ROLE', 'SALES_ROLE', 'super_admin', 'finance_role', 'support_role', 'sales_role', 'finance_admin', 'support_admin', 'sales_admin'].includes(assignedRole);
+
     let orgName = null;
-    if (organizationId) {
-      const orgRes = await query('SELECT name FROM organizations WHERE id = $1', [organizationId]);
+    let finalOrgId = isPlatformRole ? null : (organizationId ? parseInt(organizationId, 10) : null);
+    if (finalOrgId) {
+      const orgRes = await query('SELECT name FROM organizations WHERE id = $1', [finalOrgId]);
       if (orgRes.rows.length > 0) orgName = orgRes.rows[0].name;
     }
 
-    const assignedRole = roleName || (typeof roleId === 'string' ? roleId : null) || (organizationId ? 'ORG_ADMIN' : 'SUPER_ADMIN');
     let roleDisplay = 'Organization Admin';
-    if (assignedRole === 'SUPER_ADMIN') roleDisplay = 'Super Administrator';
-    else if (assignedRole === 'ORG_ADMIN') roleDisplay = 'Organization Admin';
+    if (assignedRole === 'SUPER_ADMIN' || assignedRole === 'super_admin') roleDisplay = 'Super Administrator';
+    else if (assignedRole === 'FINANCE_ROLE' || assignedRole === 'finance_role' || assignedRole === 'finance_admin') roleDisplay = 'Finance Role';
+    else if (assignedRole === 'SUPPORT_ROLE' || assignedRole === 'support_role' || assignedRole === 'support_admin') roleDisplay = 'Support Role';
+    else if (assignedRole === 'SALES_ROLE' || assignedRole === 'sales_role' || assignedRole === 'sales_admin') roleDisplay = 'Sales Role';
+    else if (assignedRole === 'ORG_ADMIN' || assignedRole === 'COMPANY_ADMIN') roleDisplay = 'Organization Admin';
     else if (assignedRole === 'ORG_MEMBER') roleDisplay = 'Organization Member';
     else roleDisplay = assignedRole;
 
@@ -212,9 +228,10 @@ exports.updateUser = async (req, res) => {
 
     await query(`
       UPDATE users
-      SET name = $1, email = $2, phone = $3, role_name = $4, role_display_name = $5, organization_id = $6, organization_name = $7
+      SET name = $1, email = $2, phone = $3, role_name = $4, role_display_name = $5, organization_id = $6, organization_name = $7,
+          crm_company_id = (CASE WHEN $6::int IS NULL THEN NULL ELSE crm_company_id END)
       WHERE id = $8
-    `, [name, email, cleanPhone, assignedRole, roleDisplay, organizationId || null, orgName, userId]);
+    `, [name, email, cleanPhone, assignedRole, roleDisplay, finalOrgId, orgName, userId]);
 
     // Handle RBAC roles assignment if roleIds provided
     if (Array.isArray(roleIds)) {

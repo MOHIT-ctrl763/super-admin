@@ -17,7 +17,10 @@ import {
   Lock,
   Eye,
   EyeOff,
-  ShieldCheck
+  ShieldCheck,
+  Copy,
+  Check,
+  Info
 } from 'lucide-react';
 import { PermissionGuard } from '../../components/auth/PermissionGuard';
 import { crmApi } from '../../services/crmApi';
@@ -48,6 +51,40 @@ const INDIAN_STATES = [
   { code: '04', name: 'Chandigarh' },
   { code: '01', name: 'Jammu & Kashmir' },
 ];
+
+function TenantIdBadge({ id }) {
+  const [copied, setCopied] = useState(false);
+  const toast = useToast();
+
+  const handleCopy = (e) => {
+    e.stopPropagation();
+    if (!id) return;
+    navigator.clipboard.writeText(id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success('Unique Tenant ID copied to clipboard');
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 mt-0.5">
+      <span
+        className="text-[11px] font-mono font-bold text-indigo-700 bg-indigo-50/90 hover:bg-indigo-100 px-2 py-0.5 rounded-md border border-indigo-200/80 max-w-[210px] truncate select-all cursor-pointer transition-colors"
+        title={`Unique Workspace ID: ${id} (Click copy icon)`}
+        onClick={handleCopy}
+      >
+        {id}
+      </span>
+      <button
+        type="button"
+        onClick={handleCopy}
+        title="Copy Unique Tenant ID"
+        className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+      >
+        {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" /> : <Copy className="w-3.5 h-3.5" />}
+      </button>
+    </div>
+  );
+}
 
 export function OrganizationsListPage() {
   const [plans, setPlans] = useState([]);
@@ -302,15 +339,15 @@ export function OrganizationsListPage() {
   const crmColumns = [
     {
       key: 'name',
-      label: 'CRM Company',
+      label: 'CRM Company & Tenant ID',
       render: (row) => (
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-extrabold text-sm shadow-xs shrink-0">
             {row.name ? row.name.charAt(0).toUpperCase() : 'C'}
           </div>
           <div>
-            <span className="font-semibold text-slate-900 text-sm block">{row.name}</span>
-            <span className="text-xs text-slate-500 font-mono font-normal">UUID: {row.id}</span>
+            <span className="font-extrabold text-slate-900 text-sm block">{row.name}</span>
+            <TenantIdBadge id={row.id} />
           </div>
         </div>
       )
@@ -463,11 +500,12 @@ export function OrganizationsListPage() {
         maxWidth="max-w-lg"
       >
         <form onSubmit={handleCreateCrmCompany} className="space-y-3.5">
-          <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-100 flex items-start gap-2.5">
-            <Layers className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
-            <p className="text-xs text-indigo-900 font-medium leading-relaxed">
-              Company Name, Indian State, and Financial Year Start are mandatory parameters for the live NexFlow CRM tenant workspace.
-            </p>
+          <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/80 flex items-start gap-2.5 shadow-xs">
+            <ShieldCheck className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0 stroke-[2.2]" />
+            <div className="text-xs text-indigo-950 font-medium leading-relaxed">
+              <span className="font-bold block text-indigo-900">Dedicated Tenant Isolation:</span>
+              Nayi company create hone par ise ek <strong>Unique Tenant ID (UUID)</strong> assign hogi. Is company ke saare CRM Leads, Customers, Quotes aur Data is ID ke under isolate rahenge aur koi dusri company ise access nahi kar payegi.
+            </div>
           </div>
 
           <div>

@@ -51,7 +51,7 @@ export function AppRoutes() {
         
         {/* Core & Tenants */}
         <Route path="dashboard" element={<PermissionGuard permission="dashboard.view" pageGuard={true}><DashboardPage /></PermissionGuard>} />
-        <Route path="analytics" element={<PermissionGuard permission="dashboard.view" pageGuard={true}><AnalyticsPage /></PermissionGuard>} />
+        <Route path="analytics" element={<PermissionGuard permission="payments.view" pageGuard={true}><AnalyticsPage /></PermissionGuard>} />
         <Route path="organizations" element={<PermissionGuard permission="organizations.view" pageGuard={true}><OrganizationsListPage /></PermissionGuard>} />
         <Route path="organizations/:id" element={<PermissionGuard permission="organizations.view" pageGuard={true}><OrganizationDetailsPage /></PermissionGuard>} />
         <Route path="users" element={<PermissionGuard permission="users.view" pageGuard={true}><UsersListPage /></PermissionGuard>} />

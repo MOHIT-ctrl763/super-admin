@@ -35,6 +35,15 @@ async function authenticateSuperAdmin(req, res, next) {
     // Fetch user's assigned roles
     const roles = await getUserRoles(dbUser.id);
     const isSuperAdmin = roles.some(r => r.slug === 'super_admin') || dbUser.role_name === 'SUPER_ADMIN' || decoded.role === 'super_admin';
+    const isPlatformUser = isSuperAdmin || !dbUser.organization_id || roles.some(r => ['super_admin', 'finance_role', 'finance_admin', 'support_role', 'support_admin', 'sales_role', 'sales_admin'].includes(r.slug)) || ['SUPER_ADMIN', 'FINANCE_ROLE', 'FINANCE', 'SUPPORT_ROLE', 'SUPPORT', 'SALES_ROLE', 'SALES'].includes(dbUser.role_name);
+
+    let crmCompId = dbUser.crm_company_id || decoded.crm_company_id || null;
+    if (!crmCompId && (dbUser.organization_id || decoded.organization_id)) {
+      try {
+        const orgRes = await query("SELECT crm_company_id FROM organizations WHERE id = $1", [dbUser.organization_id || decoded.organization_id]);
+        crmCompId = orgRes.rows[0]?.crm_company_id || null;
+      } catch (e) {}
+    }
 
     req.user = {
       id: dbUser.id,
@@ -42,12 +51,13 @@ async function authenticateSuperAdmin(req, res, next) {
       email: dbUser.email,
       role: isSuperAdmin ? 'super_admin' : (roles[0]?.slug || 'company_admin'),
       role_name: dbUser.role_name,
-      role_display_name: dbUser.role_display_name,
+      role_display_name: dbUser.role_display_name || (roles[0]?.name || (isSuperAdmin ? 'Super Administrator' : 'Company Administrator')),
       organization_id: dbUser.organization_id || decoded.organization_id || null,
       organization_name: dbUser.organization_name || decoded.organization_name || null,
-      crm_company_id: dbUser.crm_company_id || decoded.crm_company_id || null,
+      crm_company_id: crmCompId,
       roles,
-      isSuperAdmin
+      isSuperAdmin,
+      isPlatformUser
     };
     next();
   } catch (err) {
