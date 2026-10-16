@@ -1971,3 +1971,91 @@ exports.syncOrganization = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+exports.migrateLocalData = async (req, res) => {
+  try {
+    const { crmCompanies, organizations, subscriptions, payments, users } = req.body;
+    await ensureCrmCompaniesTable();
+
+    // 1. Insert crm_companies
+    if (Array.isArray(crmCompanies)) {
+      for (const comp of crmCompanies) {
+        await query(`
+          INSERT INTO crm_companies (id, name, email, phone, address, state, state_code, financial_year_start, gstin, pan, website, status, source, crm_synced, plan_id, plan_name, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+          ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, status = EXCLUDED.status
+        `, [
+          comp.id, comp.name, comp.email, comp.phone, comp.address, comp.state, comp.state_code,
+          comp.financial_year_start, comp.gstin, comp.pan, comp.website, comp.status || 'ACTIVE',
+          comp.source || 'Super Admin Provisioned', comp.crm_synced || false, comp.plan_id, comp.plan_name,
+          comp.created_at || new Date()
+        ]);
+      }
+    }
+
+    // 2. Insert organizations
+    if (Array.isArray(organizations)) {
+      for (const org of organizations) {
+        await query(`
+          INSERT INTO organizations (id, name, slug, email, phone, city, state, status, plan_id, plan_name, owner_name, users_count, crm_company_id, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, crm_company_id = EXCLUDED.crm_company_id
+        `, [
+          org.id, org.name, org.slug, org.email, org.phone, org.city, org.state, org.status,
+          org.plan_id, org.plan_name, org.owner_name, org.users_count, org.crm_company_id, org.created_at || new Date()
+        ]);
+      }
+      await query(`SELECT setval(pg_get_serial_sequence('organizations', 'id'), COALESCE(MAX(id), 1)) FROM organizations`);
+    }
+
+    // 3. Insert subscriptions
+    if (Array.isArray(subscriptions)) {
+      for (const sub of subscriptions) {
+        await query(`
+          INSERT INTO saas_subscriptions (id, organization_id, organization_name, plan_id, plan_name, billing_cycle, amount, status, current_period_start, current_period_end, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          ON CONFLICT (id) DO NOTHING
+        `, [
+          sub.id, sub.organization_id, sub.organization_name, sub.plan_id, sub.plan_name,
+          sub.billing_cycle, sub.amount, sub.status, sub.current_period_start, sub.current_period_end, sub.created_at || new Date()
+        ]);
+      }
+      await query(`SELECT setval(pg_get_serial_sequence('saas_subscriptions', 'id'), COALESCE(MAX(id), 1)) FROM saas_subscriptions`);
+    }
+
+    // 4. Insert payments
+    if (Array.isArray(payments)) {
+      for (const pay of payments) {
+        await query(`
+          INSERT INTO saas_payments (id, payment_id, organization_id, organization_name, amount, currency, method, status, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          ON CONFLICT (id) DO NOTHING
+        `, [
+          pay.id, pay.payment_id, pay.organization_id, pay.organization_name, pay.amount,
+          pay.currency, pay.method, pay.status, pay.created_at || new Date()
+        ]);
+      }
+      await query(`SELECT setval(pg_get_serial_sequence('saas_payments', 'id'), COALESCE(MAX(id), 1)) FROM saas_payments`);
+    }
+
+    // 5. Insert users
+    if (Array.isArray(users)) {
+      for (const u of users) {
+        await query(`
+          INSERT INTO users (name, email, password, phone, role_name, role_display_name, is_active, organization_id, organization_name, crm_company_id, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
+          ON CONFLICT (email) DO NOTHING
+        `, [
+          u.name, u.email, u.password, u.phone, u.role_name, u.role_display_name,
+          u.is_active, u.organization_id, u.organization_name, u.crm_company_id
+        ]);
+      }
+    }
+
+    return res.json({ success: true, message: 'Local data successfully migrated to cloud database!' });
+  } catch (err) {
+    console.error('Migration error:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+

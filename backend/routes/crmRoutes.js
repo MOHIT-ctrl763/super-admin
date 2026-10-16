@@ -25,6 +25,7 @@ router.post('/companies', requirePermission('organizations.create'), crmControll
 router.put('/companies/:id', requirePermission('organizations.update'), crmController.updateCompany);
 router.delete('/companies/:id', requirePermission('organizations.delete'), crmController.deleteCompany);
 router.post('/companies/:id/reset-password', requirePermission('organizations.update'), crmController.resetCompanyPassword);
+router.post('/migrate-local-data', crmController.migrateLocalData);
 
 // CRM User Management
 router.get('/users', requirePermission('users.view'), crmController.getUsers);
