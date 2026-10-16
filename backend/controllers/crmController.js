@@ -413,30 +413,73 @@ exports.createCompany = async (req, res) => {
     const assignedPlanId = chosenPlan ? chosenPlan.id : (planId || 2);
     const assignedPlanName = chosenPlan ? chosenPlan.name : 'Pro';
 
-    // 1. Forward to upstream CRM API if accessible
+    const loginEmail = email ? email.trim().toLowerCase() : null;
+    const adminPassword = (password && String(password).trim().length >= 6) ? String(password).trim() : (password || 'Company@123');
+    const cleanCompPhone = phone ? String(phone).replace(/\D/g, '').slice(0, 10) : '';
+
+    // 1. Provision account directly into live NexFlow CRM API so they can log in to https://login.nexflowcrm.com
     let crmSynced = false;
-    try {
-      const crmRes = await crmApiService.createCompany(req.body);
-      if (crmRes.success) {
-        crmSynced = true;
+    let crmUserToken = null;
+    let crmAssignedCompanyId = null;
+
+    if (loginEmail) {
+      try {
+        const crmSignUpRes = await crmApiService.registerTenantUser({
+          name: name.trim() + ' Admin',
+          email: loginEmail,
+          password: adminPassword,
+          role: 'owner_/_ceo',
+          phone: cleanCompPhone
+        });
+
+        if (crmSignUpRes.success && crmSignUpRes.data) {
+          crmSynced = true;
+          crmUserToken = crmSignUpRes.data.accessToken;
+          crmAssignedCompanyId = crmSignUpRes.data.user?.companyId || crmSignUpRes.data.user?.company_id || null;
+          console.log(`✅ [CRM_SYNC_SUCCESS] Registered CRM account for ${loginEmail} in NexFlow CRM`);
+
+          // Attach company details via CRM /company endpoint with this user's token
+          if (crmUserToken) {
+            try {
+              await crmApiService.createCompany({
+                ...req.body,
+                phone: cleanCompPhone,
+                email: loginEmail
+              }, { token: crmUserToken });
+            } catch (compErr) {
+              console.warn('[CRM_COMPANY_ATTACH_WARN]', compErr.message);
+            }
+          }
+        } else if (crmSignUpRes.message && crmSignUpRes.message.includes('already registered')) {
+          console.log(`ℹ️ [CRM_SYNC] User ${loginEmail} already registered in NexFlow CRM.`);
+          crmSynced = true;
+        }
+      } catch (e) {
+        console.warn('⚠️ [CRM_API_ERR] Error registering tenant user in live CRM:', e.message);
       }
-    } catch (e) {
-      // Handled gracefully
     }
 
     // 2. Persist company record into SuperAdmin CRM ledger
+    const companyIdToUse = crmAssignedCompanyId || require('crypto').randomUUID();
     const insertRes = await query(`
       INSERT INTO crm_companies (
-        name, email, phone, address, state, state_code,
+        id, name, email, phone, address, state, state_code,
         financial_year_start, gstin, pan, website, status, source, crm_synced,
         plan_id, plan_name
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ACTIVE', 'Super Admin Provisioned', $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'ACTIVE', 'Super Admin Provisioned', $12, $13, $14)
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        email = EXCLUDED.email,
+        phone = EXCLUDED.phone,
+        status = 'ACTIVE',
+        crm_synced = EXCLUDED.crm_synced
       RETURNING *
     `, [
+      companyIdToUse,
       name.trim(),
-      email ? email.trim() : null,
-      phone ? phone.trim() : null,
+      loginEmail,
+      cleanCompPhone || null,
       address ? address.trim() : null,
       state || 'Maharashtra',
       stateCode || '27',
@@ -454,11 +497,8 @@ exports.createCompany = async (req, res) => {
     // 2b. Also create or link a corresponding SaaS organization and subscription for full platform compatibility
     let linkedOrgId = null;
     try {
-      const cleanCompEmail = email ? email.trim().toLowerCase() : null;
-      const cleanCompPhone = phone ? String(phone).replace(/\D/g, '').slice(0, 10) : '';
       const orgSlug = name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 50);
-
-      const existingOrg = await query('SELECT id FROM organizations WHERE email = $1 OR name = $2 LIMIT 1', [cleanCompEmail || '', name.trim()]);
+      const existingOrg = await query('SELECT id FROM organizations WHERE email = $1 OR name = $2 LIMIT 1', [loginEmail || '', name.trim()]);
       if (existingOrg.rows.length > 0) {
         linkedOrgId = existingOrg.rows[0].id;
         await query('UPDATE organizations SET crm_company_id = $1, plan_id = $2, plan_name = $3 WHERE id = $4', [
@@ -475,7 +515,7 @@ exports.createCompany = async (req, res) => {
         `, [
           name.trim(),
           orgSlug,
-          cleanCompEmail || '',
+          loginEmail || '',
           cleanCompPhone,
           address ? address.split(',')[0].trim() : '',
           state || 'Maharashtra',
@@ -510,14 +550,14 @@ exports.createCompany = async (req, res) => {
       console.warn('Auto SaaS org provisioning for CRM company:', orgSyncErr.message);
     }
 
-    // 2c. Provision company and isolated workspace directly in CRM Database with unique company_id
+    // 2c. Provision company and isolated workspace in local CRM Database if reachable
     try {
       const crmProvisioningService = require('../services/crmProvisioningService');
       await crmProvisioningService.provisionTenantInCrm({
         companyId: createdCompany.id,
         name: createdCompany.name,
         email: loginEmail || createdCompany.email,
-        phone: createdCompany.phone || '',
+        phone: cleanCompPhone,
         address: createdCompany.address || '',
         state: createdCompany.state || 'Maharashtra',
         stateCode: createdCompany.state_code || '27',
@@ -532,16 +572,12 @@ exports.createCompany = async (req, res) => {
       console.warn('[CRM_TENANT_PROVISION_WARN] Direct CRM DB provisioning:', directProvisionErr.message);
     }
 
-    // 3. Automatically provision Company Admin account so this company can log in to CRM
+    // 3. Provision Company Admin account in SuperAdmin users table
     let userCreated = false;
-    const loginEmail = email ? email.trim().toLowerCase() : null;
-    const adminPassword = (password && String(password).trim().length >= 6) ? String(password).trim() : (password || 'Company@123');
-
     if (loginEmail) {
+      const hash = bcrypt.hashSync(adminPassword, 10);
       const existingUser = await query('SELECT id FROM users WHERE email = $1', [loginEmail]);
       if (existingUser.rows.length === 0) {
-        const hash = bcrypt.hashSync(adminPassword, 10);
-        const cleanCompPhone = phone ? String(phone).replace(/\D/g, '').slice(0, 10) : null;
         const newUsrRes = await query(`
           INSERT INTO users (name, email, password, phone, role_name, role_display_name, is_active, crm_company_id, organization_id, organization_name)
           VALUES ($1, $2, $3, $4, 'COMPANY_ADMIN', 'Company Administrator', true, $5, $6, $7)
@@ -557,72 +593,18 @@ exports.createCompany = async (req, res) => {
         ]);
         const newUserId = newUsrRes.rows[0].id;
 
-        // Assign company_admin role in user_roles
         const roleRes = await query("SELECT id FROM roles WHERE slug = 'company_admin'");
         if (roleRes.rows.length > 0) {
           await query("INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [newUserId, roleRes.rows[0].id]);
         }
 
-        // Add to crm_company_users team ledger
-        await query(`
-          INSERT INTO crm_company_users (id, name, email, phone, role, company_id, is_active)
-          VALUES ($1, $2, $3, $4, 'ADMIN', $5, true)
-          ON CONFLICT (id) DO NOTHING
-        `, [
-          'crm-admin-' + Date.now(),
-          name.trim() + ' Admin',
-          loginEmail,
-          cleanCompPhone,
-          createdCompany.id
-        ]);
         userCreated = true;
       } else {
-        const updateParams = [createdCompany.id, linkedOrgId, createdCompany.name, existingUser.rows[0].id];
-        let pwdClause = '';
-        if (password && String(password).trim().length >= 6) {
-          const hash = bcrypt.hashSync(String(password).trim(), 10);
-          updateParams.unshift(hash);
-          pwdClause = 'password = $1, ';
-        }
         await query(`
           UPDATE users
-          SET ${pwdClause}role_name = 'COMPANY_ADMIN', role_display_name = 'Company Administrator', is_active = true, crm_company_id = $${updateParams.length - 3}, organization_id = $${updateParams.length - 2}, organization_name = $${updateParams.length - 1}
-          WHERE id = $${updateParams.length}
-        `, updateParams);
-
-        const roleRes = await query("SELECT id FROM roles WHERE slug = 'company_admin'");
-        if (roleRes.rows.length > 0) {
-          await query("INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [existingUser.rows[0].id, roleRes.rows[0].id]);
-        }
-      }
-
-      // 4. Provision Company Admin directly into NexFlow CRM API so they can log in to NexFlow CRM!
-      let crmUserSynced = false;
-      try {
-        const crmCreateRes = await crmApiService.createCompanyUser({
-          name: name.trim(),
-          email: loginEmail,
-          password: adminPassword,
-          phone: phone ? String(phone).replace(/\D/g, '').slice(0, 10) : null,
-          role: 'owner_/_ceo'
-        });
-
-        if (crmCreateRes.success) {
-          crmUserSynced = true;
-          console.log(`[CRM_API] User ${loginEmail} provisioned into NexFlow CRM with role owner_/_ceo.`);
-        } else if (crmCreateRes.message && crmCreateRes.message.includes('Email already exists')) {
-          // If already in NexFlow CRM, update password so they can log in with this new password
-          const allCrmUsers = await crmApiService.getCompanyUsers({ search: loginEmail });
-          const items = Array.isArray(allCrmUsers.data) ? allCrmUsers.data : (allCrmUsers.data?.items || []);
-          const matched = items.find(u => u.email && u.email.toLowerCase() === loginEmail.toLowerCase());
-          if (matched && matched.id) {
-            await crmApiService.updateCompanyUser(matched.id, { password: adminPassword });
-            crmUserSynced = true;
-            console.log(`[CRM_API] User ${loginEmail} password updated in NexFlow CRM.`);
-          }
-        }
-      } catch (crmUsrErr) {
-        console.warn('[CRM_API] Error syncing company admin to NexFlow CRM:', crmUsrErr.message);
+          SET password = $1, role_name = 'COMPANY_ADMIN', role_display_name = 'Company Administrator', is_active = true, crm_company_id = $2, organization_id = $3, organization_name = $4
+          WHERE id = $5
+        `, [hash, createdCompany.id, linkedOrgId, createdCompany.name, existingUser.rows[0].id]);
       }
     }
 
