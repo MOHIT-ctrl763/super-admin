@@ -35,12 +35,13 @@ exports.getSubscriptions = async (req, res) => {
       pIdx++;
     }
 
-    // Tenant isolation: Non-SuperAdmin only sees their own organization's subscriptions
-    if (!req.user?.isSuperAdmin) {
-      const orgId = req.user?.organization_id || 0;
+    // Tenant isolation: External tenant users only see their own organization's subscriptions
+    // SaaS Platform staff (Super Admin, Sales, Support, Finance) can view all subscriptions
+    const isPlatformStaff = req.user?.isSuperAdmin === true || req.user?.isPlatformUser === true || !req.user?.organization_id;
+    if (!isPlatformStaff && req.user?.organization_id) {
       sql += ` AND s.organization_id = $${pIdx}`;
       countSql += ` AND s.organization_id = $${pIdx}`;
-      params.push(orgId);
+      params.push(req.user.organization_id);
       pIdx++;
     }
 
@@ -106,22 +107,87 @@ exports.createSubscription = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Plan is required' });
     }
 
-    // Lookup organization by numeric ID or crm_company_id (UUID)
+    // Lookup organization by numeric ID, crm_company_id (UUID), email, or name
     let org = null;
-    const isNumeric = !isNaN(parseInt(organization_id, 10)) && /^\d+$/.test(String(organization_id));
-    if (isNumeric) {
-      const orgRes = await query('SELECT id, name, email, crm_company_id FROM organizations WHERE id = $1', [parseInt(organization_id, 10)]);
+    const targetIdStr = String(organization_id || organizationId || '').trim();
+    const crmCompIdStr = String(req.body.crm_company_id || req.body.crmCompanyId || '').trim();
+    const companyEmail = String(req.body.companyEmail || req.body.email || '').trim().toLowerCase();
+    const companyName = String(req.body.companyName || req.body.name || '').trim();
+
+    // 1. Try by numeric organization ID
+    if (/^\d+$/.test(targetIdStr)) {
+      const orgRes = await query('SELECT id, name, email, crm_company_id FROM organizations WHERE id = $1', [parseInt(targetIdStr, 10)]);
       if (orgRes.rows.length > 0) org = orgRes.rows[0];
     }
-    if (!org) {
-      const orgByCrm = await query('SELECT id, name, email, crm_company_id FROM organizations WHERE crm_company_id = $1', [String(organization_id)]);
+
+    // 2. Try by crm_company_id in organizations
+    if (!org && targetIdStr) {
+      const orgByCrm = await query('SELECT id, name, email, crm_company_id FROM organizations WHERE crm_company_id = $1', [targetIdStr]);
       if (orgByCrm.rows.length > 0) org = orgByCrm.rows[0];
     }
+    if (!org && crmCompIdStr) {
+      const orgByCrm2 = await query('SELECT id, name, email, crm_company_id FROM organizations WHERE crm_company_id = $1', [crmCompIdStr]);
+      if (orgByCrm2.rows.length > 0) org = orgByCrm2.rows[0];
+    }
+
+    // 3. Try by email or name in organizations
+    if (!org && companyEmail) {
+      const orgByEmail = await query('SELECT id, name, email, crm_company_id FROM organizations WHERE LOWER(email) = $1', [companyEmail]);
+      if (orgByEmail.rows.length > 0) org = orgByEmail.rows[0];
+    }
+    if (!org && companyName) {
+      const orgByName = await query('SELECT id, name, email, crm_company_id FROM organizations WHERE LOWER(name) = LOWER($1)', [companyName]);
+      if (orgByName.rows.length > 0) org = orgByName.rows[0];
+    }
+
+    // 4. Try from local crm_companies table and auto-provision organization
     if (!org) {
-      // Check in crm_companies and auto-link
-      const crmRes = await query('SELECT id, name, email, phone FROM crm_companies WHERE id::text = $1', [String(organization_id)]);
-      if (crmRes.rows.length > 0) {
-        const crmComp = crmRes.rows[0];
+      let crmComp = null;
+      if (targetIdStr) {
+        const crmRes = await query('SELECT id, name, email, phone FROM crm_companies WHERE id::text = $1', [targetIdStr]);
+        if (crmRes.rows.length > 0) crmComp = crmRes.rows[0];
+      }
+      if (!crmComp && crmCompIdStr) {
+        const crmRes = await query('SELECT id, name, email, phone FROM crm_companies WHERE id::text = $1', [crmCompIdStr]);
+        if (crmRes.rows.length > 0) crmComp = crmRes.rows[0];
+      }
+      if (!crmComp && companyEmail) {
+        const crmRes = await query('SELECT id, name, email, phone FROM crm_companies WHERE LOWER(email) = $1', [companyEmail]);
+        if (crmRes.rows.length > 0) crmComp = crmRes.rows[0];
+      }
+      if (!crmComp && companyName) {
+        const crmRes = await query('SELECT id, name, email, phone FROM crm_companies WHERE LOWER(name) = LOWER($1)', [companyName]);
+        if (crmRes.rows.length > 0) crmComp = crmRes.rows[0];
+      }
+
+      // 5. If not in local crm_companies, try CRM PostgreSQL database
+      if (!crmComp && (targetIdStr || companyEmail || companyName)) {
+        try {
+          const { Client } = require('pg');
+          const crmClient = new Client({
+            host: process.env.CRM_DB_HOST || process.env.DB_HOST || 'localhost',
+            port: parseInt(process.env.CRM_DB_PORT || process.env.DB_PORT || '5432', 10),
+            user: process.env.CRM_DB_USER || process.env.DB_USER || 'postgres',
+            password: process.env.CRM_DB_PASSWORD || process.env.DB_PASSWORD || '798214',
+            database: process.env.CRM_DB_NAME || 'CRM',
+            connectionTimeoutMillis: 2000
+          });
+          await crmClient.connect();
+          let crmDbRes = null;
+          if (targetIdStr) {
+            crmDbRes = await crmClient.query('SELECT id, name, email, phone FROM public.companies WHERE id::text = $1 LIMIT 1', [targetIdStr]).catch(() => null);
+          }
+          if ((!crmDbRes || crmDbRes.rows.length === 0) && companyEmail) {
+            crmDbRes = await crmClient.query('SELECT id, name, email, phone FROM public.companies WHERE LOWER(email) = $1 LIMIT 1', [companyEmail]).catch(() => null);
+          }
+          if (crmDbRes && crmDbRes.rows.length > 0) {
+            crmComp = crmDbRes.rows[0];
+          }
+          await crmClient.end();
+        } catch (e) {}
+      }
+
+      if (crmComp) {
         const slug = (crmComp.name || 'company').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 40) + '-' + Math.floor(1000 + Math.random() * 9000);
         const ins = await query(`
           INSERT INTO organizations (name, slug, email, phone, status, plan_id, plan_name, owner_name, users_count, crm_company_id)
@@ -274,7 +340,8 @@ exports.extendSubscription = async (req, res) => {
     const subRes = await query('SELECT * FROM saas_subscriptions WHERE id = $1', [req.params.id]);
     if (subRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Subscription not found' });
 
-    if (!req.user?.isSuperAdmin && String(subRes.rows[0].organization_id) !== String(req.user?.organization_id)) {
+    const isPlatformStaff = req.user?.isSuperAdmin === true || req.user?.isPlatformUser === true || !req.user?.organization_id;
+    if (!isPlatformStaff && req.user?.organization_id && String(subRes.rows[0].organization_id) !== String(req.user?.organization_id)) {
       return res.status(403).json({ success: false, message: 'Forbidden: Access denied to other organization subscriptions.' });
     }
 
@@ -302,7 +369,8 @@ exports.cancelSubscription = async (req, res) => {
     if (subRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Subscription not found' });
 
     const sub = subRes.rows[0];
-    if (!req.user?.isSuperAdmin && String(sub.organization_id) !== String(req.user?.organization_id)) {
+    const isPlatformStaff = req.user?.isSuperAdmin === true || req.user?.isPlatformUser === true || !req.user?.organization_id;
+    if (!isPlatformStaff && req.user?.organization_id && String(sub.organization_id) !== String(req.user?.organization_id)) {
       return res.status(403).json({ success: false, message: 'Forbidden: Access denied to other organization subscriptions.' });
     }
 

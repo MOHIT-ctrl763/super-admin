@@ -62,7 +62,7 @@ const NAV_GROUPS = [
       { path: '/super-admin/support', label: 'Support', icon: LifeBuoy, permission: 'support.view' },
       { path: '/super-admin/audit-logs', label: 'Audit Logs', icon: ShieldCheck, permission: 'auditLogs.view' },
       { path: '/super-admin/settings', label: 'Settings', icon: Settings, permission: 'settings.view' },
-      { path: '/super-admin/crm-integration', label: 'CRM Integration', icon: Network, permission: 'settings.view' }
+      { path: '/super-admin/crm-integration', label: 'CRM Workspace', icon: Network, permission: 'crm.view' }
     ]
   },
   {
@@ -80,11 +80,15 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
   const filteredNavGroups = React.useMemo(() => {
     return NAV_GROUPS.map((group) => ({
       ...group,
-      items: group.items.filter(
-        (item) => !item.permission || hasPermission(item.permission)
-      )
+      items: group.items.filter((item) => {
+        if (!item.permission) return true;
+        if (item.permission === 'crm.view') {
+          return hasPermission('crm.view') || hasPermission('settings.view') || hasPermission('organizations.view') || isSuperAdmin;
+        }
+        return hasPermission(item.permission);
+      })
     })).filter((group) => group.items.length > 0);
-  }, [hasPermission, user]);
+  }, [hasPermission, isSuperAdmin, user]);
 
   return (
     <>

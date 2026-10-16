@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { crmApi } from '../../services/crmApi';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -43,11 +44,29 @@ import {
 
 export function CrmIntegrationPage() {
   const toast = useToast();
-  const { user } = useAuth();
-  const isSuperAdmin = user?.isSuperAdmin === true;
+  const { user, isSuperAdmin, isFinanceRole, isSupportRole, isSalesRole, hasPermission } = useAuth();
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusData, setStatusData] = useState(null);
-  const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'coverage' : 'companies');
+
+  const [searchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab');
+
+  const getDefaultTab = () => {
+    if (urlTab) return urlTab;
+    if (isSalesRole) return 'leads';
+    if (isSupportRole) return 'whatsapp';
+    if (isFinanceRole) return 'quotations';
+    if (isSuperAdmin || hasPermission('settings.view')) return 'coverage';
+    return 'companies';
+  };
+
+  const [activeTab, setActiveTab] = useState(getDefaultTab());
+
+  useEffect(() => {
+    if (urlTab && urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab]);
 
   // Coverage audit states
   const [coverageLoading, setCoverageLoading] = useState(false);
@@ -325,7 +344,9 @@ export function CrmIntegrationPage() {
 
   useEffect(() => {
     fetchStatus();
-    runCoverageAudit();
+    if (isSuperAdmin || hasPermission('settings.view')) {
+      runCoverageAudit();
+    }
     fetchSaasOrgs();
   }, []);
 
@@ -493,52 +514,79 @@ export function CrmIntegrationPage() {
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-200 to-purple-400 bg-clip-text text-transparent drop-shadow-sm">
                   NexFlow CRM Enterprise Gateway
                 </h1>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 shadow-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                  Live SaaS Control Panel
-                </span>
+                {isSuperAdmin && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-purple-500/20 border border-purple-500/30 text-purple-300 shadow-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                    Super Admin Console
+                  </span>
+                )}
+                {!isSuperAdmin && isSalesRole && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-blue-500/20 border border-blue-500/30 text-blue-300 shadow-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                    Sales Pipeline Mode
+                  </span>
+                )}
+                {!isSuperAdmin && isSupportRole && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-amber-500/20 border border-amber-500/30 text-amber-300 shadow-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    Support Desk Mode
+                  </span>
+                )}
+                {!isSuperAdmin && isFinanceRole && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 shadow-xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Finance &amp; Revenue Mode
+                  </span>
+                )}
               </div>
               <p className="mt-1 text-xs sm:text-sm text-slate-400 font-normal">
-                Multi-tenant CRM management bridge connecting SaaS Super Admin with NexFlow modular REST API engine.
+                {isSalesRole && 'Manage client leads, sales deal pipeline, commercial quotations, and client communications.'}
+                {isSupportRole && 'Handle customer support, WhatsApp live chat conversations, call telephony, and tenant staff assistance.'}
+                {isFinanceRole && 'Oversee commercial quotations, customer billing, stock valuation, and revenue reconciliation.'}
+                {(isSuperAdmin || (!isSalesRole && !isSupportRole && !isFinanceRole)) && 'Multi-tenant CRM management bridge connecting SaaS Super Admin with NexFlow modular REST API engine.'}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 relative z-10 self-start sm:self-auto">
+        <div className="flex items-center gap-3 relative z-10 self-start sm:self-auto flex-wrap">
           <button
             onClick={() => {
               fetchStatus();
-              runCoverageAudit();
+              if (isSuperAdmin || hasPermission('settings.view')) {
+                runCoverageAudit();
+              }
             }}
             disabled={statusLoading || coverageLoading}
             className="flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium text-slate-300 hover:text-white bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 rounded-xl transition-all shadow-sm"
           >
             <RefreshCw className={`w-4 h-4 ${(statusLoading || coverageLoading) ? 'animate-spin text-indigo-400' : ''}`} />
-            <span>Run Health Check</span>
+            <span>Refresh CRM</span>
           </button>
 
-          {isAuthenticated ? (
-            <button
-              onClick={handleDisconnect}
-              className="px-3.5 py-2 text-sm font-medium text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-900/50 border border-red-800/40 rounded-lg transition-colors"
-            >
-              Disconnect Session
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                setConnectForm((prev) => ({
-                  ...prev,
-                  customBaseUrl: statusData?.baseUrl || 'https://api.nexflowcrm.com/api/v1'
-                }));
-                setConnectModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl shadow-lg shadow-indigo-500/25 transition-all"
-            >
-              <Key className="w-4 h-4" />
-              <span>Connect CRM Account</span>
-            </button>
+          {(isSuperAdmin || hasPermission('settings.view')) && (
+            isAuthenticated ? (
+              <button
+                onClick={handleDisconnect}
+                className="px-3.5 py-2 text-sm font-medium text-red-400 hover:text-red-300 bg-red-950/40 hover:bg-red-900/50 border border-red-800/40 rounded-lg transition-colors"
+              >
+                Disconnect Session
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setConnectForm((prev) => ({
+                    ...prev,
+                    customBaseUrl: statusData?.baseUrl || 'https://api.nexflowcrm.com/api/v1'
+                  }));
+                  setConnectModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl shadow-lg shadow-indigo-500/25 transition-all"
+              >
+                <Key className="w-4 h-4" />
+                <span>Connect CRM Account</span>
+              </button>
+            )
           )}
         </div>
       </div>
@@ -621,168 +669,123 @@ export function CrmIntegrationPage() {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Navigation Tabs (Filtered by User Role & Permissions) */}
       <div className="border-b border-slate-800">
         <nav className="flex space-x-3 overflow-x-auto pb-1 scrollbar-thin">
-          <button
-            onClick={() => setActiveTab('coverage')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'coverage'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <Activity className="w-4 h-4 text-emerald-400" />
-            <span>API Health & Coverage</span>
-            {coverageData && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
-                {coverageData.summary.verifiedOperational}/{coverageData.summary.totalIdentified}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'overview'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            Overview & Architecture
-          </button>
-
-          <button
-            onClick={() => setActiveTab('companies')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'companies'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <Building2 className="w-4 h-4" />
-            <span>Companies</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'users'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Company Users</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('branches')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'branches'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <Building2 className="w-4 h-4 text-purple-400" />
-            <span>Branches & Offices</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('leads')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'leads'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <Flame className="w-4 h-4 text-amber-400" />
-            <span>Leads & Pipeline</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('quotations')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'quotations'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            <span>Quotations & Revenue</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('telephony')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'telephony'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <PhoneCall className="w-4 h-4 text-blue-400" />
-            <span>Calls & Telephony</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('projects')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'projects'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <FolderGit2 className="w-4 h-4 text-purple-400" />
-            <span>Projects & Stock</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('whatsapp')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'whatsapp'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <MessageSquare className="w-4 h-4 text-emerald-400" />
-            <span>WhatsApp & AI Bot</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('lead-capture')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'lead-capture'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <Layers className="w-4 h-4 text-sky-400" />
-            <span>Lead Capture Forms</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('workflows')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'workflows'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <Workflow className="w-4 h-4 text-indigo-400" />
-            <span>Workflows & Presets</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('activities')}
-            className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'activities'
-                ? 'border-indigo-500 text-indigo-400 font-semibold'
-                : 'border-transparent text-slate-400 hover:text-slate-300'
-            }`}
-          >
-            <Activity className="w-4 h-4 text-emerald-400" />
-            <span>Live Activity Stream</span>
-          </button>
+          {[
+            {
+              id: 'coverage',
+              label: 'API Health & Coverage',
+              icon: Activity,
+              iconColor: 'text-emerald-400',
+              visible: isSuperAdmin || hasPermission('settings.view'),
+              badge: coverageData ? `${coverageData.summary.verifiedOperational}/${coverageData.summary.totalIdentified}` : null
+            },
+            {
+              id: 'overview',
+              label: 'Overview & Architecture',
+              visible: isSuperAdmin || hasPermission('settings.view')
+            },
+            {
+              id: 'leads',
+              label: 'Leads & Pipeline',
+              icon: Flame,
+              iconColor: 'text-amber-400',
+              visible: isSuperAdmin || hasPermission('crm.leads.manage') || isSalesRole
+            },
+            {
+              id: 'quotations',
+              label: 'Quotations & Revenue',
+              icon: FileSpreadsheet,
+              iconColor: 'text-emerald-400',
+              visible: isSuperAdmin || hasPermission('crm.quotations.manage') || isSalesRole || isFinanceRole
+            },
+            {
+              id: 'telephony',
+              label: 'Calls & Telephony',
+              icon: PhoneCall,
+              iconColor: 'text-blue-400',
+              visible: isSuperAdmin || hasPermission('crm.telephony.manage') || isSalesRole || isSupportRole
+            },
+            {
+              id: 'whatsapp',
+              label: 'WhatsApp & AI Bot',
+              icon: MessageSquare,
+              iconColor: 'text-emerald-400',
+              visible: isSuperAdmin || hasPermission('crm.support.manage') || isSupportRole
+            },
+            {
+              id: 'companies',
+              label: 'Companies',
+              icon: Building2,
+              visible: isSuperAdmin || hasPermission('crm.companies.manage') || hasPermission('organizations.view')
+            },
+            {
+              id: 'users',
+              label: 'Company Users',
+              icon: Users,
+              visible: isSuperAdmin || hasPermission('crm.users.manage') || isSupportRole
+            },
+            {
+              id: 'branches',
+              label: 'Branches & Offices',
+              icon: Building2,
+              iconColor: 'text-purple-400',
+              visible: isSuperAdmin || hasPermission('crm.companies.manage') || isSalesRole
+            },
+            {
+              id: 'projects',
+              label: 'Projects & Stock',
+              icon: FolderGit2,
+              iconColor: 'text-purple-400',
+              visible: isSuperAdmin || hasPermission('crm.projects.view') || isSalesRole || isFinanceRole
+            },
+            {
+              id: 'lead-capture',
+              label: 'Lead Capture Forms',
+              icon: Layers,
+              iconColor: 'text-sky-400',
+              visible: isSuperAdmin || hasPermission('crm.leads.manage') || isSalesRole
+            },
+            {
+              id: 'workflows',
+              label: 'Workflows & Presets',
+              icon: Workflow,
+              iconColor: 'text-indigo-400',
+              visible: isSuperAdmin || hasPermission('crm.workflows.manage')
+            },
+            {
+              id: 'activities',
+              label: 'Live Activity Stream',
+              icon: Activity,
+              iconColor: 'text-emerald-400',
+              visible: isSuperAdmin || hasPermission('auditLogs.view') || isSupportRole || isFinanceRole
+            }
+          ]
+            .filter(tab => tab.visible !== false)
+            .map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`pb-3 px-2 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    isActive
+                      ? 'border-indigo-500 text-indigo-400 font-semibold'
+                      : 'border-transparent text-slate-400 hover:text-slate-300'
+                  }`}
+                >
+                  {Icon && <Icon className={`w-4 h-4 ${tab.iconColor || ''}`} />}
+                  <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
         </nav>
       </div>
 

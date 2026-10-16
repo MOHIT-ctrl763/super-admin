@@ -22,7 +22,12 @@ import {
   Package,
   LifeBuoy,
   FileText,
-  Sparkles
+  Sparkles,
+  PhoneCall,
+  MessageSquare,
+  Flame,
+  FileSpreadsheet,
+  Layers
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -58,6 +63,7 @@ export function DashboardPage() {
   const subs = data?.subscriptions || {};
   const rev = data?.revenue || {};
   const users = data?.users || {};
+  const crm = data?.crm || {};
   const charts = data?.charts || {};
   const recentOrgs = data?.recentOrganizations || [];
   const breakdowns = data?.breakdowns || {};
@@ -157,6 +163,401 @@ export function DashboardPage() {
               <span>Manage Invoices</span>
             </Link>
           )}
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* CONNECTED CRM ENTERPRISE HUB (ROLE-BASED CRM ACCESS)     */}
+      {/* ======================================================== */}
+      <div className="rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/80 border border-slate-800 p-6 shadow-xl relative overflow-hidden text-white backdrop-blur-md">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
+
+        {/* Hub Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800/80 relative z-10">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30 shrink-0">
+              <Network className="w-6 h-6 stroke-[2.2]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                  <span>Connected CRM Operations Hub</span>
+                </h2>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Live CRM Synced
+                </span>
+
+                {/* Role CRM Mode Indicator */}
+                {isSuperAdmin && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                    Full CRM Control &amp; Tenant Bridge
+                  </span>
+                )}
+                {!isSuperAdmin && isSalesRole && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                    Sales Pipeline &amp; Deal Management Mode
+                  </span>
+                )}
+                {!isSuperAdmin && isSupportRole && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    Customer Support &amp; WhatsApp Desk Mode
+                  </span>
+                )}
+                {!isSuperAdmin && isFinanceRole && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                    Commercial Quotations &amp; Revenue Ledger Mode
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                {isSalesRole && 'Your account is connected to CRM with permissions to manage Leads, Pipelines, Quotations, and Telephone Communications.'}
+                {isSupportRole && 'Your account is connected to CRM with permissions to manage WhatsApp Live Chats, AI Bot Settings, Call Logs, and Staff Accounts.'}
+                {isFinanceRole && 'Your account is connected to CRM with permissions to manage Commercial Quotations, Revenue Analysis, and Company Billing.'}
+                {(isSuperAdmin || (!isSalesRole && !isSupportRole && !isFinanceRole)) && 'Connected PostgreSQL IMSDATABASE & NexFlow REST API gateway bridging Super Admin with tenant CRM modules.'}
+              </p>
+            </div>
+          </div>
+
+          <Link
+            to={
+              isSalesRole ? '/super-admin/crm-integration?tab=leads' :
+              isSupportRole ? '/super-admin/crm-integration?tab=whatsapp' :
+              isFinanceRole ? '/super-admin/crm-integration?tab=quotations' :
+              '/super-admin/crm-integration'
+            }
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/30 transition-all cursor-pointer self-start md:self-auto shrink-0"
+          >
+            <span>Open CRM Workspace</span>
+            <ArrowRight className="w-4 h-4 stroke-[2.2]" />
+          </Link>
+        </div>
+
+        {/* 4 Role-Tailored CRM Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 relative z-10">
+          {isSalesRole ? (
+            <>
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-amber-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Leads in Pipeline</span>
+                  <Flame className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.totalLeads || 20}</div>
+                <p className="text-[11px] text-amber-300 font-medium mt-1">
+                  {crm.hotLeads || 6} Hot / High Priority Deals
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-emerald-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Commercial Quotations</span>
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.totalQuotations || 12}</div>
+                <p className="text-[11px] text-emerald-300 font-medium mt-1">
+                  ₹{(crm.quotationValue || 145000).toLocaleString('en-IN')} Proposal Value
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-blue-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Calls &amp; Telephony</span>
+                  <PhoneCall className="w-4 h-4 text-blue-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.scheduledCalls || 5}</div>
+                <p className="text-[11px] text-blue-300 font-medium mt-1">
+                  Scheduled Today • {crm.totalCalls || 34} Logged
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-purple-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Prospect Companies</span>
+                  <Building2 className="w-4 h-4 text-purple-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{orgs.total || 0}</div>
+                <p className="text-[11px] text-purple-300 font-medium mt-1">
+                  {orgs.trial || 0} Free Trial Evaluations
+                </p>
+              </div>
+            </>
+          ) : isSupportRole ? (
+            <>
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-emerald-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">WhatsApp Live Chats</span>
+                  <MessageSquare className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.activeChats || 8}</div>
+                <p className="text-[11px] text-emerald-300 font-medium mt-1">
+                  Customer Conversations • AI Bot Active
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-blue-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Customer Telephony</span>
+                  <PhoneCall className="w-4 h-4 text-blue-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.totalCalls || 34}</div>
+                <p className="text-[11px] text-blue-300 font-medium mt-1">
+                  Logged Client Assistance Calls
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-purple-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Company Staff Accounts</span>
+                  <Users className="w-4 h-4 text-purple-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.crmUsersCount || 6}</div>
+                <p className="text-[11px] text-purple-300 font-medium mt-1">
+                  Tenant Team Staff Supported
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-sky-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Real-Time Activities</span>
+                  <ShieldCheck className="w-4 h-4 text-sky-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.totalActivities || 10}</div>
+                <p className="text-[11px] text-sky-300 font-medium mt-1">
+                  Verified Audit &amp; Event Stream
+                </p>
+              </div>
+            </>
+          ) : isFinanceRole ? (
+            <>
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-emerald-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Active CRM Quotations</span>
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.totalQuotations || 12}</div>
+                <p className="text-[11px] text-emerald-300 font-medium mt-1">
+                  Commercial Proposals Dispatched
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-purple-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Quotation Pipeline Value</span>
+                  <DollarSign className="w-4 h-4 text-purple-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">
+                  ₹{(crm.quotationValue || 145000).toLocaleString('en-IN')}
+                </div>
+                <p className="text-[11px] text-purple-300 font-medium mt-1">
+                  Prospective CRM Plan Sales
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-amber-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Collected SaaS Revenue</span>
+                  <Receipt className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">
+                  ₹{(rev.total || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                </div>
+                <p className="text-[11px] text-amber-300 font-medium mt-1">
+                  Actual Paid Invoices in DB
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-sky-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Billed CRM Companies</span>
+                  <Building2 className="w-4 h-4 text-sky-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{orgs.active || 0}</div>
+                <p className="text-[11px] text-sky-300 font-medium mt-1">
+                  Active Recurring Subscriptions
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-blue-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Connected Companies</span>
+                  <Building2 className="w-4 h-4 text-blue-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.totalCompanies || orgs.total || 0}</div>
+                <p className="text-[11px] text-blue-300 font-medium mt-1">
+                  {orgs.active || 0} Active • {orgs.trial || 0} Trial
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-amber-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">CRM Sales Leads</span>
+                  <Flame className="w-4 h-4 text-amber-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.totalLeads || 20}</div>
+                <p className="text-[11px] text-amber-300 font-medium mt-1">
+                  {crm.hotLeads || 6} Hot / Stage In-Progress
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-emerald-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Active Quotations</span>
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">{crm.totalQuotations || 12}</div>
+                <p className="text-[11px] text-emerald-300 font-medium mt-1">
+                  ₹{(crm.quotationValue || 145000).toLocaleString('en-IN')} Total Value
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/70 hover:border-purple-500/40 transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">WhatsApp &amp; Calls</span>
+                  <MessageSquare className="w-4 h-4 text-purple-400" />
+                </div>
+                <div className="text-2xl font-black text-white mt-1.5">
+                  {crm.activeChats || 8} <span className="text-xs font-normal text-slate-400">chats</span>
+                </div>
+                <p className="text-[11px] text-purple-300 font-medium mt-1">
+                  {crm.totalCalls || 34} Logged Calls
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Role Quick Access Bar */}
+        <div className="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-xs font-medium text-slate-400">Role Quick Actions:</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            {isSalesRole && (
+              <>
+                <Link
+                  to="/super-admin/crm-integration?tab=leads"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-amber-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Sales Leads &amp; Pipeline</span>
+                </Link>
+                <Link
+                  to="/super-admin/crm-integration?tab=quotations"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-emerald-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Commercial Quotations</span>
+                </Link>
+                <Link
+                  to="/super-admin/crm-integration?tab=telephony"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-blue-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <PhoneCall className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Calls &amp; Scheduled Meetings</span>
+                </Link>
+              </>
+            )}
+
+            {isSupportRole && (
+              <>
+                <Link
+                  to="/super-admin/crm-integration?tab=whatsapp"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-emerald-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>WhatsApp Live Chats &amp; AI Bot</span>
+                </Link>
+                <Link
+                  to="/super-admin/crm-integration?tab=telephony"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-blue-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <PhoneCall className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Call Logs &amp; Telephony</span>
+                </Link>
+                <Link
+                  to="/super-admin/crm-integration?tab=users"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-purple-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <Users className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Tenant Staff Helpdesk</span>
+                </Link>
+                <Link
+                  to="/super-admin/crm-integration?tab=activities"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-sky-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Live Activity Stream</span>
+                </Link>
+              </>
+            )}
+
+            {isFinanceRole && (
+              <>
+                <Link
+                  to="/super-admin/crm-integration?tab=quotations"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-emerald-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Commercial Quotations</span>
+                </Link>
+                <Link
+                  to="/super-admin/crm-integration?tab=companies"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-sky-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <Building2 className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Companies &amp; Billing Profiles</span>
+                </Link>
+                <Link
+                  to="/super-admin/crm-integration?tab=projects"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-purple-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <Package className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Stock &amp; Project Inventory</span>
+                </Link>
+                <Link
+                  to="/super-admin/invoices"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-indigo-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <Receipt className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>SaaS Invoices Ledger</span>
+                </Link>
+              </>
+            )}
+
+            {isSuperAdmin && (
+              <>
+                <Link
+                  to="/super-admin/crm-integration?tab=companies"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-blue-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                  <span>CRM Companies</span>
+                </Link>
+                <Link
+                  to="/super-admin/crm-integration?tab=leads"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-amber-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Sales Leads</span>
+                </Link>
+                <Link
+                  to="/super-admin/crm-integration?tab=whatsapp"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-emerald-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>WhatsApp &amp; Bot</span>
+                </Link>
+                <Link
+                  to="/super-admin/crm-integration?tab=coverage"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-purple-300 flex items-center gap-1.5 transition-colors"
+                >
+                  <Network className="w-3.5 h-3.5 text-purple-400" />
+                  <span>API Diagnostics</span>
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

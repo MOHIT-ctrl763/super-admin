@@ -19,92 +19,92 @@ router.post('/connect', requireAnyPermission(['settings.view', 'organizations.up
 router.post('/disconnect', requireAnyPermission(['settings.view', 'organizations.update']), crmController.disconnect);
 
 // CRM Company Management
-router.get('/companies', requirePermission('organizations.view'), crmController.getCompanies);
-router.get('/companies/:id', requirePermission('organizations.view'), crmController.getCompanyById);
-router.post('/companies', requirePermission('organizations.create'), crmController.createCompany);
-router.put('/companies/:id', requirePermission('organizations.update'), crmController.updateCompany);
+router.get('/companies', requireAnyPermission(['crm.companies.manage', 'crm.view', 'organizations.view']), crmController.getCompanies);
+router.get('/companies/:id', requireAnyPermission(['crm.companies.manage', 'crm.view', 'organizations.view']), crmController.getCompanyById);
+router.post('/companies', requireAnyPermission(['crm.companies.manage', 'organizations.create']), crmController.createCompany);
+router.put('/companies/:id', requireAnyPermission(['crm.companies.manage', 'organizations.update']), crmController.updateCompany);
 router.delete('/companies/:id', requirePermission('organizations.delete'), crmController.deleteCompany);
-router.post('/companies/:id/reset-password', requirePermission('organizations.update'), crmController.resetCompanyPassword);
-router.post('/migrate-local-data', crmController.migrateLocalData);
+router.post('/companies/:id/reset-password', requireAnyPermission(['crm.companies.manage', 'organizations.update']), crmController.resetCompanyPassword);
+router.post('/migrate-local-data', requirePermission('settings.view'), crmController.migrateLocalData);
 
 // CRM User Management
-router.get('/users', requirePermission('users.view'), crmController.getUsers);
-router.get('/users/:id', requirePermission('users.view'), crmController.getUserById);
-router.post('/users', requirePermission('users.create'), crmController.createUser);
-router.put('/users/:id', requirePermission('users.update'), crmController.updateUser);
+router.get('/users', requireAnyPermission(['crm.users.manage', 'users.view', 'crm.view']), crmController.getUsers);
+router.get('/users/:id', requireAnyPermission(['crm.users.manage', 'users.view']), crmController.getUserById);
+router.post('/users', requireAnyPermission(['crm.users.manage', 'users.create']), crmController.createUser);
+router.put('/users/:id', requireAnyPermission(['crm.users.manage', 'users.update']), crmController.updateUser);
 router.delete('/users/:id', requirePermission('users.delete'), crmController.deleteUser);
-router.patch('/users/:id/toggle-status', requirePermission('users.suspend'), crmController.toggleUserStatus);
+router.patch('/users/:id/toggle-status', requireAnyPermission(['crm.users.manage', 'users.suspend', 'users.update']), crmController.toggleUserStatus);
 
 // CRM Branches Management
-router.get('/branches', requirePermission('organizations.view'), crmController.getBranches);
-router.get('/branches/stats', requirePermission('organizations.view'), crmController.getBranchStats);
-router.get('/branches/:id', requirePermission('organizations.view'), crmController.getBranchById);
-router.get('/branches/:id/users', requirePermission('users.view'), crmController.getBranchUsers);
-router.post('/branches', requirePermission('organizations.create'), crmController.createBranch);
-router.put('/branches/:id', requirePermission('organizations.update'), crmController.updateBranch);
-router.patch('/branches/:id/toggle-status', requirePermission('organizations.update'), crmController.toggleBranchStatus);
+router.get('/branches', requireAnyPermission(['crm.companies.manage', 'crm.view', 'organizations.view']), crmController.getBranches);
+router.get('/branches/stats', requireAnyPermission(['crm.companies.manage', 'crm.view', 'organizations.view']), crmController.getBranchStats);
+router.get('/branches/:id', requireAnyPermission(['crm.companies.manage', 'crm.view', 'organizations.view']), crmController.getBranchById);
+router.get('/branches/:id/users', requireAnyPermission(['crm.users.manage', 'users.view']), crmController.getBranchUsers);
+router.post('/branches', requireAnyPermission(['crm.companies.manage', 'organizations.create']), crmController.createBranch);
+router.put('/branches/:id', requireAnyPermission(['crm.companies.manage', 'organizations.update']), crmController.updateBranch);
+router.patch('/branches/:id/toggle-status', requireAnyPermission(['crm.companies.manage', 'organizations.update']), crmController.toggleBranchStatus);
 router.delete('/branches/:id', requirePermission('organizations.delete'), crmController.deleteBranch);
 
 // Positions & Teams & Roles
-router.get('/positions', requirePermission('settings.view'), crmController.getPositions);
-router.get('/teams', requirePermission('settings.view'), crmController.getTeams);
-router.get('/roles', requirePermission('roles.view'), crmController.getRoles);
-router.get('/roles/stats', requirePermission('roles.view'), crmController.getRoleStats);
+router.get('/positions', requireAnyPermission(['crm.view', 'settings.view', 'roles.view']), crmController.getPositions);
+router.get('/teams', requireAnyPermission(['crm.view', 'settings.view', 'roles.view']), crmController.getTeams);
+router.get('/roles', requireAnyPermission(['crm.view', 'roles.view']), crmController.getRoles);
+router.get('/roles/stats', requireAnyPermission(['crm.view', 'roles.view']), crmController.getRoleStats);
 
 // SaaS Tenant to CRM Link
-router.post('/sync-organization/:id', requirePermission('organizations.update'), crmController.syncOrganization);
+router.post('/sync-organization/:id', requireAnyPermission(['crm.companies.manage', 'organizations.update']), crmController.syncOrganization);
 
 // CRM Leads & Pipeline
-router.get('/leads', requirePermission('organizations.view'), crmController.getLeads);
-router.get('/leads/stats', requirePermission('dashboard.view'), crmController.getLeadStats);
-router.get('/leads/:id', requirePermission('organizations.view'), crmController.getLeadById);
-router.post('/leads', requirePermission('organizations.create'), crmController.createLead);
-router.patch('/leads/:id', requirePermission('organizations.update'), crmController.updateLead);
-router.delete('/leads/:id', requirePermission('organizations.delete'), crmController.deleteLead);
+router.get('/leads', requireAnyPermission(['crm.leads.manage', 'crm.view', 'organizations.view']), crmController.getLeads);
+router.get('/leads/stats', requireAnyPermission(['crm.leads.manage', 'crm.view', 'dashboard.view']), crmController.getLeadStats);
+router.get('/leads/:id', requireAnyPermission(['crm.leads.manage', 'crm.view', 'organizations.view']), crmController.getLeadById);
+router.post('/leads', requireAnyPermission(['crm.leads.manage', 'organizations.create']), crmController.createLead);
+router.patch('/leads/:id', requireAnyPermission(['crm.leads.manage', 'organizations.update']), crmController.updateLead);
+router.delete('/leads/:id', requireAnyPermission(['crm.leads.manage', 'organizations.delete']), crmController.deleteLead);
 
 // Pipeline Stages & Fields Configuration
-router.get('/pipeline-stages', requirePermission('settings.view'), crmController.getPipelineStages);
-router.get('/pipeline-stages/:stageId/fields', requirePermission('settings.view'), crmController.getStageFields);
-router.get('/custom-fields', requirePermission('settings.view'), crmController.getCustomFields);
-router.get('/industry-templates', requirePermission('settings.view'), crmController.getIndustryTemplates);
+router.get('/pipeline-stages', requireAnyPermission(['crm.leads.manage', 'crm.view', 'settings.view']), crmController.getPipelineStages);
+router.get('/pipeline-stages/:stageId/fields', requireAnyPermission(['crm.leads.manage', 'crm.view', 'settings.view']), crmController.getStageFields);
+router.get('/custom-fields', requireAnyPermission(['crm.leads.manage', 'crm.view', 'settings.view']), crmController.getCustomFields);
+router.get('/industry-templates', requireAnyPermission(['crm.leads.manage', 'crm.view', 'settings.view']), crmController.getIndustryTemplates);
 
 // Lead Capture Forms
-router.get('/lead-capture/forms', requirePermission('settings.view'), crmController.getLeadCaptureForms);
-router.get('/lead-capture/forms/:formId/submissions', requirePermission('settings.view'), crmController.getFormSubmissions);
+router.get('/lead-capture/forms', requireAnyPermission(['crm.leads.manage', 'crm.view', 'settings.view']), crmController.getLeadCaptureForms);
+router.get('/lead-capture/forms/:formId/submissions', requireAnyPermission(['crm.leads.manage', 'crm.view', 'settings.view']), crmController.getFormSubmissions);
 
 // CRM WhatsApp & Bot
-router.get('/whatsapp/chats', requirePermission('settings.view'), crmController.getWhatsAppChats);
-router.get('/whatsapp/stats', requirePermission('settings.view'), crmController.getWhatsAppStats);
-router.get('/whatsapp/chats/:chatId/messages', requirePermission('settings.view'), crmController.getWhatsAppChatMessages);
-router.get('/whatsapp/templates', requirePermission('settings.view'), crmController.getWhatsAppTemplates);
-router.get('/whatsapp/quick-replies', requirePermission('settings.view'), crmController.getWhatsAppQuickReplies);
-router.get('/bot/settings', requirePermission('settings.view'), crmController.getBotSettings);
+router.get('/whatsapp/chats', requireAnyPermission(['crm.support.manage', 'crm.view', 'support.view', 'settings.view']), crmController.getWhatsAppChats);
+router.get('/whatsapp/stats', requireAnyPermission(['crm.support.manage', 'crm.view', 'support.view', 'settings.view']), crmController.getWhatsAppStats);
+router.get('/whatsapp/chats/:chatId/messages', requireAnyPermission(['crm.support.manage', 'crm.view', 'support.view', 'settings.view']), crmController.getWhatsAppChatMessages);
+router.get('/whatsapp/templates', requireAnyPermission(['crm.support.manage', 'crm.view', 'support.view', 'settings.view']), crmController.getWhatsAppTemplates);
+router.get('/whatsapp/quick-replies', requireAnyPermission(['crm.support.manage', 'crm.view', 'support.view', 'settings.view']), crmController.getWhatsAppQuickReplies);
+router.get('/bot/settings', requireAnyPermission(['crm.support.manage', 'crm.view', 'settings.view']), crmController.getBotSettings);
 
 // CRM Workflows & Projects
-router.get('/workflows', requirePermission('plans.view'), crmController.getWorkflows);
-router.get('/projects', requirePermission('plans.view'), crmController.getProjects);
-router.get('/projects/:id', requirePermission('plans.view'), crmController.getProjectById);
-router.get('/projects/:id/inventory', requirePermission('plans.view'), crmController.getProjectInventory);
-router.get('/projects/:id/tasks', requirePermission('plans.view'), crmController.getProjectTasks);
+router.get('/workflows', requireAnyPermission(['crm.workflows.manage', 'crm.view', 'plans.view']), crmController.getWorkflows);
+router.get('/projects', requireAnyPermission(['crm.projects.view', 'crm.leads.manage', 'crm.view', 'plans.view']), crmController.getProjects);
+router.get('/projects/:id', requireAnyPermission(['crm.projects.view', 'crm.leads.manage', 'crm.view', 'plans.view']), crmController.getProjectById);
+router.get('/projects/:id/inventory', requireAnyPermission(['crm.projects.view', 'crm.leads.manage', 'crm.view', 'plans.view']), crmController.getProjectInventory);
+router.get('/projects/:id/tasks', requireAnyPermission(['crm.projects.view', 'crm.leads.manage', 'crm.view', 'plans.view']), crmController.getProjectTasks);
 
 // CRM Quotations & Revenue
-router.get('/quotations', requirePermission('dashboard.view'), crmController.getQuotations);
-router.get('/quotations/stats', requirePermission('dashboard.view'), crmController.getQuotationStats);
-router.get('/quotations/templates', requirePermission('settings.view'), crmController.getQuotationTemplates);
-router.get('/quotations/:id', requirePermission('dashboard.view'), crmController.getQuotationById);
+router.get('/quotations', requireAnyPermission(['crm.quotations.manage', 'crm.view', 'dashboard.view', 'payments.view', 'invoices.view']), crmController.getQuotations);
+router.get('/quotations/stats', requireAnyPermission(['crm.quotations.manage', 'crm.view', 'dashboard.view']), crmController.getQuotationStats);
+router.get('/quotations/templates', requireAnyPermission(['crm.quotations.manage', 'crm.view', 'settings.view']), crmController.getQuotationTemplates);
+router.get('/quotations/:id', requireAnyPermission(['crm.quotations.manage', 'crm.view', 'dashboard.view']), crmController.getQuotationById);
 
 // Calls & Telephony
-router.get('/calls', requirePermission('dashboard.view'), crmController.getCalls);
-router.get('/calls/stats', requirePermission('dashboard.view'), crmController.getCallStats);
-router.get('/calls/scheduled', requirePermission('dashboard.view'), crmController.getScheduledCalls);
+router.get('/calls', requireAnyPermission(['crm.telephony.manage', 'crm.support.manage', 'crm.view', 'dashboard.view', 'support.view']), crmController.getCalls);
+router.get('/calls/stats', requireAnyPermission(['crm.telephony.manage', 'crm.support.manage', 'crm.view', 'dashboard.view']), crmController.getCallStats);
+router.get('/calls/scheduled', requireAnyPermission(['crm.telephony.manage', 'crm.support.manage', 'crm.view', 'dashboard.view']), crmController.getScheduledCalls);
 
 // Marketing Campaigns
-router.get('/campaigns', requirePermission('plans.view'), crmController.getCampaigns);
-router.get('/campaigns/:id', requirePermission('plans.view'), crmController.getCampaignById);
+router.get('/campaigns', requireAnyPermission(['crm.leads.manage', 'crm.view', 'plans.view']), crmController.getCampaigns);
+router.get('/campaigns/:id', requireAnyPermission(['crm.leads.manage', 'crm.view', 'plans.view']), crmController.getCampaignById);
 
 // Verified CRM Activity Stream & Reports
-router.get('/activities', requirePermission('auditLogs.view'), crmController.getActivities);
-router.get('/reports/summary', requirePermission('dashboard.view'), crmController.getReportsSummary);
-router.get('/integrations', requirePermission('settings.view'), crmController.getIntegrations);
+router.get('/activities', requireAnyPermission(['auditLogs.view', 'crm.support.manage', 'crm.view', 'support.view']), crmController.getActivities);
+router.get('/reports/summary', requireAnyPermission(['dashboard.view', 'crm.view', 'payments.view']), crmController.getReportsSummary);
+router.get('/integrations', requireAnyPermission(['crm.view', 'settings.view']), crmController.getIntegrations);
 
 module.exports = router;

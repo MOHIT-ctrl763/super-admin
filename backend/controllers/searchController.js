@@ -15,6 +15,7 @@ exports.globalSearch = async (req, res) => {
     }
 
     const isSuperAdmin = req.user?.isSuperAdmin === true;
+    const isPlatformStaff = isSuperAdmin || req.user?.isPlatformUser === true || !req.user?.organization_id;
     const orgId = req.user?.organization_id || 0;
     const compId = req.user?.crm_company_id || '0';
 
@@ -25,7 +26,7 @@ exports.globalSearch = async (req, res) => {
       WHERE (name ILIKE $1 OR slug ILIKE $1 OR email ILIKE $1 OR owner_name ILIKE $1)
     `;
     const orgsParams = [searchTerm];
-    if (!isSuperAdmin) {
+    if (!isPlatformStaff && req.user?.organization_id) {
       orgsQuery += ` AND id = $2`;
       orgsParams.push(orgId);
     }
@@ -39,7 +40,7 @@ exports.globalSearch = async (req, res) => {
       WHERE (name ILIKE $1 OR email ILIKE $1)
     `;
     const usersParams = [searchTerm];
-    if (!isSuperAdmin) {
+    if (!isPlatformStaff && req.user?.organization_id) {
       usersQuery += ` AND (organization_id = $2 OR crm_company_id = $3)`;
       usersParams.push(orgId, compId);
     }

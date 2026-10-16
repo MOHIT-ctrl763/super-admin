@@ -13,10 +13,11 @@ const { createTenantCrmToken } = require('../services/crmProvisioningService');
  */
 function getCallerTenantScope(req) {
   const isSuperAdmin = req.user?.isSuperAdmin === true;
+  const isPlatformUser = isSuperAdmin || req.user?.isPlatformUser === true || !req.user?.organization_id || ['super_admin', 'finance_role', 'support_role', 'sales_role'].includes(req.user?.role) || ['SUPER_ADMIN', 'FINANCE_ROLE', 'SUPPORT_ROLE', 'SALES_ROLE'].includes(req.user?.role_name);
   const companyId = req.user?.crm_company_id ? String(req.user.crm_company_id) : (req.user?.organization_id ? String(req.user.organization_id) : null);
   const companyName = req.user?.organization_name || null;
   const userEmail = req.user?.email ? req.user.email.toLowerCase().trim() : null;
-  return { isSuperAdmin, companyId, companyName, userEmail };
+  return { isSuperAdmin, isPlatformUser, companyId, companyName, userEmail };
 }
 
 /**
@@ -24,7 +25,7 @@ function getCallerTenantScope(req) {
  */
 function getTenantApiOptions(req) {
   const scope = getCallerTenantScope(req);
-  if (!scope.isSuperAdmin && scope.companyId) {
+  if (!scope.isPlatformUser && scope.companyId) {
     try {
       const token = createTenantCrmToken({
         userId: req.user?.id,
@@ -217,10 +218,10 @@ async function ensureCrmCompaniesTable() {
 exports.getCompanies = async (req, res) => {
   try {
     await ensureCrmCompaniesTable();
-    const { isSuperAdmin, companyId, companyName, userEmail } = getCallerTenantScope(req);
+    const { isSuperAdmin, isPlatformUser, companyId, companyName, userEmail } = getCallerTenantScope(req);
 
-    // Strict Tenant Isolation: Non-SuperAdmin only sees their own company
-    if (!isSuperAdmin) {
+    // Strict Tenant Isolation: Non-Platform Tenant user only sees their own company
+    if (!isPlatformUser && companyId) {
       let localRes;
       if (companyId) {
         localRes = await query(
@@ -331,13 +332,13 @@ exports.getCompanies = async (req, res) => {
 exports.getCompanyById = async (req, res) => {
   try {
     await ensureCrmCompaniesTable();
-    const { isSuperAdmin, companyId, companyName, userEmail } = getCallerTenantScope(req);
+    const { isSuperAdmin, isPlatformUser, companyId, companyName, userEmail } = getCallerTenantScope(req);
 
     const localRes = await query('SELECT * FROM crm_companies WHERE id::text = $1', [req.params.id]);
     if (localRes.rows.length > 0) {
       const comp = localRes.rows[0];
-      // Enforce isolation for non-superadmins
-      if (!isSuperAdmin) {
+      // Enforce isolation for non-platform tenant users
+      if (!isPlatformUser && companyId) {
         const isOwner = (companyId && String(comp.id) === companyId) ||
                         (companyName && comp.name && comp.name.toLowerCase() === companyName.toLowerCase()) ||
                         (userEmail && comp.email && comp.email.toLowerCase() === userEmail);
@@ -348,7 +349,7 @@ exports.getCompanyById = async (req, res) => {
       return res.json({ success: true, data: comp });
     }
 
-    if (!isSuperAdmin) {
+    if (!isPlatformUser) {
       return res.status(404).json({ success: false, message: 'Company not found or access denied.' });
     }
 
@@ -843,10 +844,10 @@ exports.deleteCompany = async (req, res) => {
 
 exports.getUsers = async (req, res) => {
   try {
-    const { isSuperAdmin, companyId, companyName, userEmail } = getCallerTenantScope(req);
+    const { isSuperAdmin, isPlatformUser, companyId, companyName, userEmail } = getCallerTenantScope(req);
 
-    // Strict Tenant Isolation: Non-SuperAdmin only sees their own company's staff
-    if (!isSuperAdmin) {
+    // Strict Tenant Isolation: Non-Platform Tenant user only sees their own company's staff
+    if (!isPlatformUser && companyId) {
       const localRes = await query(
         `SELECT * FROM crm_company_users 
          WHERE (company_id = $1 OR company_id = $2 OR (company_id IS NULL AND email = $3))
@@ -948,11 +949,11 @@ exports.getUsers = async (req, res) => {
 
 exports.getUserById = async (req, res) => {
   try {
-    const { isSuperAdmin, companyId, companyName } = getCallerTenantScope(req);
+    const { isSuperAdmin, isPlatformUser, companyId, companyName } = getCallerTenantScope(req);
     const localRes = await query('SELECT * FROM crm_company_users WHERE id = $1', [req.params.id]);
     if (localRes.rows.length > 0) {
       const r = localRes.rows[0];
-      if (!isSuperAdmin && r.company_id && r.company_id !== companyId && r.company_id !== companyName) {
+      if (!isPlatformUser && companyId && r.company_id && r.company_id !== companyId && r.company_id !== companyName) {
         return res.status(403).json({ success: false, message: 'Forbidden: You cannot view staff of other companies.' });
       }
       return res.json({
@@ -971,7 +972,7 @@ exports.getUserById = async (req, res) => {
         }
       });
     }
-    if (!isSuperAdmin) {
+    if (!isPlatformUser) {
       return res.status(404).json({ success: false, message: 'User not found or access denied.' });
     }
     const result = await crmApiService.getCompanyUserById(req.params.id);
@@ -1160,9 +1161,9 @@ exports.toggleUserStatus = async (req, res) => {
 
 exports.getBranches = async (req, res) => {
   try {
-    const { isSuperAdmin, companyId, companyName } = getCallerTenantScope(req);
+    const { isSuperAdmin, isPlatformUser, companyId, companyName } = getCallerTenantScope(req);
 
-    if (!isSuperAdmin) {
+    if (!isPlatformUser && companyId) {
       const localRes = await query(
         `SELECT * FROM crm_branches WHERE company_id = $1 OR company_id = $2 OR company_id IS NULL ORDER BY name ASC`,
         [companyId || '', companyName || '']
@@ -1444,7 +1445,7 @@ exports.getRoleStats = async (req, res) => {
 exports.getLeads = async (req, res) => {
   try {
     const { token, scope } = getTenantApiOptions(req);
-    const { isSuperAdmin, companyId, companyName } = scope;
+    const { isSuperAdmin, isPlatformUser, companyId, companyName } = scope;
     const options = token ? { token } : {};
 
     // 1. Fetch leads from CRM PostgreSQL database
@@ -1462,7 +1463,7 @@ exports.getLeads = async (req, res) => {
 
       let q = `SELECT * FROM public.leads`;
       let params = [];
-      if (!isSuperAdmin) {
+      if (!isPlatformUser && companyId) {
         q += ` WHERE company_id::text = $1`;
         params.push(companyId || '0');
       }
@@ -1507,8 +1508,8 @@ exports.getLeads = async (req, res) => {
       }
     }
 
-    // Strict Tenant isolation filter
-    if (!isSuperAdmin) {
+    // Strict Tenant isolation filter for non-platform tenant users
+    if (!isPlatformUser && companyId) {
       const filtered = combined.filter(item => {
         const cId = String(item.companyId || item.company_id || '');
         const cName = String(item.companyName || item.company_name || '');
@@ -1539,13 +1540,13 @@ exports.getLeads = async (req, res) => {
 exports.getLeadStats = async (req, res) => {
   try {
     const { token, scope } = getTenantApiOptions(req);
-    const { isSuperAdmin } = scope;
+    const { isSuperAdmin, isPlatformUser } = scope;
     const options = token ? { token } : {};
     const result = await crmApiService.getLeadStats(options);
     if (result.success) {
       return res.json(result);
     }
-    if (!isSuperAdmin) {
+    if (!isPlatformUser) {
       return res.json({
         success: true,
         data: {
@@ -1690,8 +1691,8 @@ exports.getWhatsAppChats = async (req, res) => {
 
 exports.getWhatsAppStats = async (req, res) => {
   try {
-    const { isSuperAdmin } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser } = getCallerTenantScope(req);
+    if (!isPlatformUser) {
       return res.json({
         success: true,
         data: { activeChats: 0, responseRate: '100%', messagesToday: 0 }
@@ -1746,8 +1747,8 @@ exports.getBotSettings = async (req, res) => {
 
 exports.getWorkflows = async (req, res) => {
   try {
-    const { isSuperAdmin } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser } = getCallerTenantScope(req);
+    if (!isPlatformUser) {
       return res.json({ success: true, data: [] });
     }
     const result = await crmApiService.getWorkflows();
@@ -1759,8 +1760,8 @@ exports.getWorkflows = async (req, res) => {
 
 exports.getProjects = async (req, res) => {
   try {
-    const { isSuperAdmin } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser } = getCallerTenantScope(req);
+    if (!isPlatformUser) {
       return res.json({ success: true, data: [], total: 0 });
     }
     const result = await crmApiService.getProjects(req.query);
@@ -1812,8 +1813,8 @@ exports.getProjectTasks = async (req, res) => {
 
 exports.getQuotations = async (req, res) => {
   try {
-    const { isSuperAdmin } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser } = getCallerTenantScope(req);
+    if (!isPlatformUser) {
       return res.json({
         success: true,
         data: { items: [], total: 0 }
@@ -1828,8 +1829,8 @@ exports.getQuotations = async (req, res) => {
 
 exports.getQuotationStats = async (req, res) => {
   try {
-    const { isSuperAdmin } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser } = getCallerTenantScope(req);
+    if (!isPlatformUser) {
       return res.json({
         success: true,
         data: {
@@ -1872,8 +1873,8 @@ exports.getQuotationById = async (req, res) => {
 
 exports.getCalls = async (req, res) => {
   try {
-    const { isSuperAdmin } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser } = getCallerTenantScope(req);
+    if (!isPlatformUser) {
       return res.json({ success: true, data: { items: [], total: 0 } });
     }
     const result = await crmApiService.getCalls(req.query);
@@ -1885,8 +1886,8 @@ exports.getCalls = async (req, res) => {
 
 exports.getCallStats = async (req, res) => {
   try {
-    const { isSuperAdmin } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser } = getCallerTenantScope(req);
+    if (!isPlatformUser) {
       return res.json({
         success: true,
         data: { totalCalls: 0, connected: 0, avgDuration: '00:00' }
@@ -1901,8 +1902,8 @@ exports.getCallStats = async (req, res) => {
 
 exports.getScheduledCalls = async (req, res) => {
   try {
-    const { isSuperAdmin } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser } = getCallerTenantScope(req);
+    if (!isPlatformUser) {
       return res.json({ success: true, data: [] });
     }
     const result = await crmApiService.getScheduledCalls();
@@ -1914,8 +1915,8 @@ exports.getScheduledCalls = async (req, res) => {
 
 exports.getCampaigns = async (req, res) => {
   try {
-    const { isSuperAdmin } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser } = getCallerTenantScope(req);
+    if (!isPlatformUser) {
       return res.json({ success: true, data: [] });
     }
     const result = await crmApiService.getCampaigns();
@@ -1936,8 +1937,8 @@ exports.getCampaignById = async (req, res) => {
 
 exports.getActivities = async (req, res) => {
   try {
-    const { isSuperAdmin } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser } = getCallerTenantScope(req);
+    if (!isPlatformUser) {
       return res.json({
         success: true,
         data: [],
@@ -1967,8 +1968,8 @@ exports.getActivities = async (req, res) => {
 
 exports.getReportsSummary = async (req, res) => {
   try {
-    const { isSuperAdmin, companyId } = getCallerTenantScope(req);
-    if (!isSuperAdmin) {
+    const { isSuperAdmin, isPlatformUser, companyId } = getCallerTenantScope(req);
+    if (!isPlatformUser && companyId) {
       // Fresh isolated metrics for this company
       return res.json({
         success: true,

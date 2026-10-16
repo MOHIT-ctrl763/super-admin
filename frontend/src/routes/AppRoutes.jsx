@@ -73,7 +73,7 @@ export function AppRoutes() {
         <Route path="support" element={<PermissionGuard permission="support.view" pageGuard={true}><SupportTicketsPage /></PermissionGuard>} />
         <Route path="audit-logs" element={<PermissionGuard permission="auditLogs.view" pageGuard={true}><AuditLogsPage /></PermissionGuard>} />
         <Route path="settings" element={<PermissionGuard permission="settings.view" pageGuard={true}><SystemSettingsPage /></PermissionGuard>} />
-        <Route path="crm-integration" element={<PermissionGuard permission="settings.view" pageGuard={true}><CrmIntegrationPage /></PermissionGuard>} />
+        <Route path="crm-integration" element={<PermissionGuard permissions={['crm.view', 'settings.view', 'organizations.view', 'dashboard.view']} pageGuard={true}><CrmIntegrationPage /></PermissionGuard>} />
         
         {/* RBAC Access Control */}
         <Route path="roles" element={<PermissionGuard permission="roles.view" pageGuard={true}><RolesListPage /></PermissionGuard>} />

@@ -97,7 +97,18 @@ const PERMISSIONS_LIST = [
 
   // 17. Permissions
   { module: 'permissions', action: 'view', code: 'permissions.view', name: 'View Permissions', description: 'Inspect available system permissions' },
-  { module: 'permissions', action: 'manage', code: 'permissions.manage', name: 'Manage Permissions', description: 'Configure permission assignments' }
+  { module: 'permissions', action: 'manage', code: 'permissions.manage', name: 'Manage Permissions', description: 'Configure permission assignments' },
+
+  // 18. CRM Integration & Modules
+  { module: 'crm', action: 'view', code: 'crm.view', name: 'Access CRM Module', description: 'Access CRM dashboard, hub overview and live status' },
+  { module: 'crm', action: 'leads', code: 'crm.leads.manage', name: 'Manage CRM Leads & Pipeline', description: 'Create, update and track sales leads, stages, and capture forms' },
+  { module: 'crm', action: 'quotations', code: 'crm.quotations.manage', name: 'Manage CRM Quotations', description: 'View, generate and manage commercial quotations and proposals' },
+  { module: 'crm', action: 'telephony', code: 'crm.telephony.manage', name: 'Manage CRM Telephony & Calls', description: 'Inspect call records, telephony logs and schedule client calls' },
+  { module: 'crm', action: 'support', code: 'crm.support.manage', name: 'Manage CRM WhatsApp & Support', description: 'Manage WhatsApp chats, live customer conversations, templates and AI bot' },
+  { module: 'crm', action: 'companies', code: 'crm.companies.manage', name: 'Manage CRM Companies & Branches', description: 'Manage CRM tenant companies, profiles, and branch offices' },
+  { module: 'crm', action: 'users', code: 'crm.users.manage', name: 'Manage CRM Staff Users', description: 'View and manage team user accounts across CRM companies' },
+  { module: 'crm', action: 'projects', code: 'crm.projects.view', name: 'View CRM Projects & Inventory', description: 'View active customer projects, tasks and product stock inventory' },
+  { module: 'crm', action: 'workflows', code: 'crm.workflows.manage', name: 'Manage CRM Workflows', description: 'Configure automation workflows and industry templates' }
 ];
 
 const DEFAULT_ROLES_CONFIG = [
@@ -122,7 +133,10 @@ const DEFAULT_ROLES_CONFIG = [
       'payments.view', 'payments.refund', 'payments.export',
       'invoices.view', 'invoices.create', 'invoices.update', 'invoices.download', 'invoices.export',
       'coupons.view', 'coupons.create', 'coupons.update', 'coupons.delete',
-      'trials.view', 'trials.update'
+      'trials.view', 'trials.update',
+      'crm.view',
+      'crm.quotations.manage',
+      'crm.projects.view'
     ]
   },
   {
@@ -137,7 +151,12 @@ const DEFAULT_ROLES_CONFIG = [
       'support.view', 'support.create', 'support.update', 'support.resolve',
       'notifications.view', 'notifications.create', 'notifications.update', 'notifications.send',
       'usage.view', 'usage.export',
-      'auditLogs.view'
+      'auditLogs.view',
+      'crm.view',
+      'crm.support.manage',
+      'crm.telephony.manage',
+      'crm.users.manage',
+      'crm.companies.manage'
     ]
   },
   {
@@ -151,7 +170,13 @@ const DEFAULT_ROLES_CONFIG = [
       'plans.view',
       'subscriptions.view', 'subscriptions.create', 'subscriptions.update', 'subscriptions.renew',
       'trials.view', 'trials.create', 'trials.update',
-      'invoices.view', 'invoices.download'
+      'invoices.view', 'invoices.download',
+      'crm.view',
+      'crm.leads.manage',
+      'crm.quotations.manage',
+      'crm.telephony.manage',
+      'crm.companies.manage',
+      'crm.projects.view'
     ]
   },
   {
@@ -169,7 +194,14 @@ const DEFAULT_ROLES_CONFIG = [
       'usage.view',
       'notifications.view',
       'support.view', 'support.create', 'support.update',
-      'settings.view'
+      'settings.view',
+      'crm.view',
+      'crm.leads.manage',
+      'crm.quotations.manage',
+      'crm.telephony.manage',
+      'crm.support.manage',
+      'crm.users.manage',
+      'crm.projects.view'
     ]
   },
   {
@@ -187,7 +219,14 @@ const DEFAULT_ROLES_CONFIG = [
       'usage.view',
       'notifications.view',
       'support.view', 'support.create', 'support.update',
-      'settings.view'
+      'settings.view',
+      'crm.view',
+      'crm.leads.manage',
+      'crm.quotations.manage',
+      'crm.telephony.manage',
+      'crm.support.manage',
+      'crm.users.manage',
+      'crm.projects.view'
     ]
   }
 ];
@@ -293,6 +332,40 @@ async function seedRBAC() {
         ON CONFLICT (user_id, role_id) DO NOTHING
       `, [u.id, saRoleId]);
     }
+  }
+
+  // 5. Seed default platform users for testing roles (Sales, Support, Finance)
+  try {
+    const bcrypt = require('bcryptjs');
+    const demoUsers = [
+      { name: 'Sarah Sales', email: 'sales@saasplatform.com', role_name: 'SALES_ROLE', role_slug: 'sales_role', role_display_name: 'Sales Manager' },
+      { name: 'Sam Support', email: 'support@saasplatform.com', role_name: 'SUPPORT_ROLE', role_slug: 'support_role', role_display_name: 'Support Specialist' },
+      { name: 'Felix Finance', email: 'finance@saasplatform.com', role_name: 'FINANCE_ROLE', role_slug: 'finance_role', role_display_name: 'Finance Executive' }
+    ];
+
+    for (const du of demoUsers) {
+      const existing = await query('SELECT id FROM users WHERE email = $1', [du.email]);
+      let uid = existing.rows[0]?.id;
+      if (!uid) {
+        const hash = bcrypt.hashSync('123456', 10);
+        const insertU = await query(`
+          INSERT INTO users (name, email, password, phone, role_name, role_display_name, is_active, organization_id, last_login)
+          VALUES ($1, $2, $3, '+91 9876543210', $4, $5, true, NULL, CURRENT_TIMESTAMP)
+          RETURNING id
+        `, [du.name, du.email, hash, du.role_name, du.role_display_name]);
+        uid = insertU.rows[0].id;
+      }
+      const rRes = await query('SELECT id FROM roles WHERE slug = $1', [du.role_slug]);
+      if (rRes.rows.length > 0 && uid) {
+        await query(`
+          INSERT INTO user_roles (user_id, role_id)
+          VALUES ($1, $2)
+          ON CONFLICT (user_id, role_id) DO NOTHING
+        `, [uid, rRes.rows[0].id]);
+      }
+    }
+  } catch (seedErr) {
+    console.warn('[RBAC_SEED] Non-critical demo user creation error:', seedErr.message);
   }
 
   console.log('✅ RBAC Roles & Permissions synchronized in superadmin_db!');

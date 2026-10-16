@@ -20,12 +20,12 @@ exports.getOrganizations = async (req, res) => {
       pIdx++;
     }
 
-    // Tenant Isolation: Non-SuperAdmin only sees their own organization
-    if (!req.user?.isSuperAdmin) {
-      const orgId = req.user?.organization_id || 0;
+    // Tenant Isolation: External tenant users only see their own organization
+    const isPlatformStaff = req.user?.isSuperAdmin === true || req.user?.isPlatformUser === true || !req.user?.organization_id;
+    if (!isPlatformStaff && req.user?.organization_id) {
       sql += ` AND id = $${pIdx}`;
       countSql += ` AND id = $${pIdx}`;
-      params.push(orgId);
+      params.push(req.user.organization_id);
       pIdx++;
     }
 
@@ -61,7 +61,8 @@ exports.getOrganizations = async (req, res) => {
 
 exports.getOrganizationById = async (req, res) => {
   try {
-    if (!req.user?.isSuperAdmin && String(req.user?.organization_id) !== String(req.params.id)) {
+    const isPlatformStaff = req.user?.isSuperAdmin === true || req.user?.isPlatformUser === true || !req.user?.organization_id;
+    if (!isPlatformStaff && req.user?.organization_id && String(req.user?.organization_id) !== String(req.params.id)) {
       return res.status(403).json({ success: false, message: 'Forbidden: You cannot view other organizations.' });
     }
 

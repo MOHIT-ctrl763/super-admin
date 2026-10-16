@@ -235,9 +235,20 @@ export function SubscriptionsListPage() {
 
     setActionLoading(true);
     try {
+      const chosenOrg = organizations.find(o => 
+        String(o.id) === String(subForm.organizationId) || 
+        String(o.crm_company_id) === String(subForm.organizationId)
+      );
+      const isPureNumericId = /^\d+$/.test(String(subForm.organizationId || ''));
+      const orgIdValue = isPureNumericId ? parseInt(subForm.organizationId, 10) : subForm.organizationId;
+
       const payload = {
-        organizationId: parseInt(subForm.organizationId, 10),
-        organization_id: parseInt(subForm.organizationId, 10),
+        organizationId: orgIdValue,
+        organization_id: orgIdValue,
+        crmCompanyId: chosenOrg?.crm_company_id || (chosenOrg?.is_crm_only ? chosenOrg.id : null),
+        crm_company_id: chosenOrg?.crm_company_id || (chosenOrg?.is_crm_only ? chosenOrg.id : null),
+        companyName: chosenOrg?.name,
+        companyEmail: chosenOrg?.email,
         planId: parseInt(subForm.planId, 10),
         plan_id: parseInt(subForm.planId, 10),
         billingCycle: subForm.billingCycle,
