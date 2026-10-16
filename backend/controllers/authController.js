@@ -235,21 +235,17 @@ exports.forgotPassword = async (req, res) => {
       VALUES ($1, $2, 'AUTH_PASSWORD_RESET_REQUESTED', 'AUTH', 'Password reset code requested for Super Admin', $3)
     `, [user.id, user.name, req.ip || '127.0.0.1']);
 
-    // Send Live OTP Email via Gmail SMTP
-    try {
-      await sendOtpEmail({
-        to: user.email,
-        name: user.name || 'Super Administrator',
-        otp,
-        expiresInMinutes: 15
-      });
-    } catch (mailErr) {
-      console.error('⚠️ SMTP Email error in forgotPassword:', mailErr.message);
-      return res.status(500).json({
-        success: false,
-        message: `Unable to deliver reset code to ${cleanEmail}: ${mailErr.message}. Please check email address or server configuration.`
-      });
-    }
+    // Send Live OTP Email via Gmail SMTP in background (Non-blocking)
+    sendOtpEmail({
+      to: user.email,
+      name: user.name || 'Super Administrator',
+      otp,
+      expiresInMinutes: 15
+    }).then(() => {
+      console.log(`✅ [PASSWORD_RESET_OTP] Successfully dispatched to ${cleanEmail}`);
+    }).catch((mailErr) => {
+      console.warn('⚠️ SMTP Email error in forgotPassword:', mailErr.message);
+    });
 
     return res.json({
       success: true,
@@ -405,31 +401,26 @@ exports.sendEmailOtp = async (req, res) => {
       description = `A staff member account is being provisioned for (${cleanEmail}). Use the 6-digit verification code below:`;
     }
 
-    // Dispatch email via SMTP
-    let emailSent = false;
-    try {
-      await sendOtpEmail({
-        to: cleanEmail,
-        name: name || cleanEmail,
-        otp,
-        expiresInMinutes: 15,
-        title,
-        subject,
-        description
-      });
-      emailSent = true;
+    // Dispatch email via SMTP in background (Non-blocking for instant sub-second UI response)
+    sendOtpEmail({
+      to: cleanEmail,
+      name: name || cleanEmail,
+      otp,
+      expiresInMinutes: 15,
+      title,
+      subject,
+      description
+    }).then(() => {
       console.log(`✅ [EMAIL_OTP] Successfully dispatched to ${cleanEmail} (${purpose})`);
-    } catch (mailErr) {
+    }).catch((mailErr) => {
       console.warn(`⚠️ [EMAIL_OTP] SMTP delivery warning to ${cleanEmail}: ${mailErr.message}. Fallback verification active.`);
-    }
+    });
 
     console.log(`🔑 [LIVE_OTP_CODE] For ${cleanEmail} (${purpose}): ${otp}`);
 
     return res.json({
       success: true,
-      message: emailSent
-        ? `Verification code sent to ${cleanEmail}. Please check your inbox or spam folder.`
-        : `Verification code generated for ${cleanEmail}. Code: ${otp}`,
+      message: `Verification code sent to ${cleanEmail}. Please check your inbox or spam folder.`,
       data: {
         email: cleanEmail,
         expiresInMinutes: 15,

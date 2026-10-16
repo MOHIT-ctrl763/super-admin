@@ -7,24 +7,22 @@ function getTransporter() {
     const host = process.env.SMTP_HOST || 'smtp.gmail.com';
     const user = process.env.SMTP_USER || 'mohitpoewal12@gmail.com';
     const pass = process.env.SMTP_PASS || 'buvlouttomlhhvwk';
+    const port = parseInt(process.env.SMTP_PORT, 10) || 465;
+    const secure = process.env.SMTP_SECURE !== 'false';
 
-    if (host.includes('gmail.com')) {
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user, pass }
-
-      });
-    } else {
-      const port = parseInt(process.env.SMTP_PORT, 10) || 465;
-      const secure = process.env.SMTP_SECURE === 'true' || port === 465;
-      transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure,
-        auth: { user, pass },
-        tls: { rejectUnauthorized: false }
-      });
-    }
+    transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      auth: { user, pass },
+      tls: { rejectUnauthorized: false },
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 8000
+    });
   }
   return transporter;
 }
