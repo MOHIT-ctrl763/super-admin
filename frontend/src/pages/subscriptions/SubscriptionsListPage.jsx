@@ -25,6 +25,7 @@ import {
   UserX
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { crmApi } from '../../services/crmApi';
 
 export function SubscriptionsListPage() {
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'churn'
@@ -97,14 +98,52 @@ export function SubscriptionsListPage() {
 
   const fetchPrerequisites = async () => {
     try {
-      const [orgsRes, plansRes] = await Promise.all([
-        api.get('/organizations', { limit: 100 }),
-        api.get('/plans')
+      const [orgsRes, plansRes, crmCompsRes] = await Promise.all([
+        api.get('/organizations', { limit: 200 }),
+        api.get('/plans'),
+        crmApi.getCompanies().catch(() => ({ success: false, data: [] }))
       ]);
 
+      let allOrgs = [];
       if (orgsRes.success && orgsRes.data) {
-        setOrganizations(orgsRes.data.items || []);
+        allOrgs = [...(orgsRes.data.items || [])];
       }
+
+      // Merge CRM companies so every single CRM company is available in dropdown
+      if (crmCompsRes.success && crmCompsRes.data) {
+        const crmList = Array.isArray(crmCompsRes.data) ? crmCompsRes.data : (crmCompsRes.data.items || []);
+        for (const c of crmList) {
+          const matchIdx = allOrgs.findIndex(o => 
+            (o.crm_company_id && String(o.crm_company_id) === String(c.id)) ||
+            (o.name && c.name && o.name.toLowerCase() === c.name.toLowerCase()) ||
+            (o.email && c.email && o.email.toLowerCase() === c.email.toLowerCase())
+          );
+
+          if (matchIdx !== -1) {
+            allOrgs[matchIdx] = {
+              ...allOrgs[matchIdx],
+              crm_company_id: c.id,
+              crm_synced: true
+            };
+          } else {
+            allOrgs.push({
+              id: c.id,
+              name: c.name,
+              email: c.email || '',
+              phone: c.phone || '',
+              plan_name: c.plan_name || 'Standard',
+              status: c.status || 'ACTIVE',
+              crm_company_id: c.id,
+              is_crm_only: true
+            });
+          }
+        }
+      }
+
+      // Sort alphabetically by company name
+      allOrgs.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      setOrganizations(allOrgs);
+
       if (plansRes.success && plansRes.data) {
         const plansList = Array.isArray(plansRes.data) ? plansRes.data : [];
         setPlans(plansList);
@@ -729,9 +768,16 @@ export function SubscriptionsListPage() {
         maxWidth="max-w-xl"
       >
         <form onSubmit={handleCreateSubscription} className="space-y-4">
-          {/* Organization Select */}
+          {/* Target CRM Company Select */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Target Organization *</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-slate-700">
+                Target CRM Company *
+              </label>
+              <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                {organizations.length} CRM Companies Available
+              </span>
+            </div>
             <select
               required
               value={subForm.organizationId}
@@ -743,15 +789,18 @@ export function SubscriptionsListPage() {
                   handlePlanOrCycleChange(chosenOrg.plan_id, subForm.billingCycle);
                 }
               }}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500 shadow-xs"
             >
-              <option value="">-- Select Organization --</option>
+              <option value="">-- Select CRM Company ({organizations.length} Companies) --</option>
               {organizations.map((org) => (
                 <option key={org.id} value={org.id}>
-                  {org.name} ({org.email}) - Current: {org.plan_name || 'No Plan'} [{org.status}]
+                  🏢 {org.name} {org.email ? `(${org.email})` : ''} • Current: {org.plan_name || 'Standard'} [{org.status || 'ACTIVE'}]
                 </option>
               ))}
             </select>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Selecting a company provisions this subscription directly to their CRM workspace and enables full CRM access.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

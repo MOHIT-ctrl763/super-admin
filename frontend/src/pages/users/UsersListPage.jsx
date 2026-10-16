@@ -30,20 +30,31 @@ import {
   Phone,
   RefreshCw,
   Sparkles,
-  UserCheck
+  UserCheck,
+  CreditCard,
+  LifeBuoy,
+  Info
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { PermissionGuard } from '../../components/auth/PermissionGuard';
 import { crmApi } from '../../services/crmApi';
 
+export const SAAS_PLATFORM_ROLES = [
+  { id: 'SUPER_ADMIN', name: 'SUPER_ADMIN', display_name: 'Super Admin (Full Unrestricted Access)' },
+  { id: 'FINANCE_ROLE', name: 'FINANCE_ROLE', display_name: 'Finance Role (Billing, Payments & Invoices)' },
+  { id: 'SUPPORT_ROLE', name: 'SUPPORT_ROLE', display_name: 'Support Role (Client Assistance & Helpdesk)' },
+  { id: 'SALES_ROLE', name: 'SALES_ROLE', display_name: 'Sales Role (Onboarding, Plans & Subscriptions)' }
+];
+
+export const TENANT_ORG_ROLES = [
+  { id: 'ORG_ADMIN', name: 'ORG_ADMIN', display_name: 'Organization Admin' },
+  { id: 'ORG_MEMBER', name: 'ORG_MEMBER', display_name: 'Organization Member' }
+];
+
 export function UsersListPage() {
   const { hasPermission, isSuperAdmin } = useAuth();
   const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([
-    { id: 'SUPER_ADMIN', name: 'SUPER_ADMIN', display_name: 'Super Administrator' },
-    { id: 'ORG_ADMIN', name: 'ORG_ADMIN', display_name: 'Organization Admin' },
-    { id: 'ORG_MEMBER', name: 'ORG_MEMBER', display_name: 'Organization Member' }
-  ]);
+  const [roles, setRoles] = useState(SAAS_PLATFORM_ROLES);
   const [allRbacRoles, setAllRbacRoles] = useState([]);
   const [organizations, setOrganizations] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
@@ -613,19 +624,33 @@ export function UsersListPage() {
             <div className="flex flex-wrap items-center gap-1.5">
               {hasRoles ? (
                 row.roles.map((r) => {
-                  const isSa = r.slug === 'super_admin';
+                  const slug = (r.slug || '').toLowerCase();
+                  let badgeStyle = 'bg-slate-100 text-slate-800 border-slate-300';
+                  let icon = <Shield className="w-3 h-3 text-slate-600" />;
+
+                  if (slug === 'super_admin') {
+                    badgeStyle = 'bg-purple-50 text-purple-800 border-purple-200';
+                    icon = <ShieldCheck className="w-3 h-3 text-purple-600" />;
+                  } else if (slug === 'finance_role' || slug === 'finance_admin') {
+                    badgeStyle = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                    icon = <CreditCard className="w-3 h-3 text-emerald-600" />;
+                  } else if (slug === 'support_role' || slug === 'support_admin') {
+                    badgeStyle = 'bg-amber-50 text-amber-800 border-amber-200';
+                    icon = <LifeBuoy className="w-3 h-3 text-amber-600" />;
+                  } else if (slug === 'sales_role' || slug === 'sales_admin') {
+                    badgeStyle = 'bg-blue-50 text-blue-800 border-blue-200';
+                    icon = <Sparkles className="w-3 h-3 text-blue-600" />;
+                  } else if (r.is_system) {
+                    badgeStyle = 'bg-indigo-50 text-indigo-800 border-indigo-200';
+                    icon = <Shield className="w-3 h-3 text-indigo-600" />;
+                  }
+
                   return (
                     <span
                       key={r.id || r.slug}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
-                        isSa
-                          ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                          : r.is_system
-                          ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
-                          : 'bg-purple-50 text-purple-800 border border-purple-200'
-                      }`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${badgeStyle}`}
                     >
-                      {isSa ? <ShieldCheck className="w-3 h-3 text-blue-600" /> : <Shield className="w-3 h-3 text-indigo-600" />}
+                      {icon}
                       {r.name}
                     </span>
                   );
@@ -1245,6 +1270,63 @@ export function UsersListPage() {
             </div>
           </div>
 
+          {/* User Scope / Type Selection */}
+          <div className="p-3.5 bg-slate-100 rounded-xl border border-slate-200">
+            <label className="block text-xs font-bold text-slate-700 mb-2">
+              User Scope & Access Level <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({
+                    ...form,
+                    organizationId: '',
+                    roleName: 'SUPER_ADMIN'
+                  });
+                }}
+                className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                  !form.organizationId
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                SaaS Platform Staff
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({
+                    ...form,
+                    organizationId: organizations[0]?.id || '',
+                    roleName: 'ORG_ADMIN'
+                  });
+                }}
+                className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+                  form.organizationId
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20'
+                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                Tenant Company User
+              </button>
+            </div>
+            
+            {!form.organizationId ? (
+              <p className="mt-2.5 text-[11px] text-blue-700 font-semibold bg-blue-50 p-2.5 rounded-lg border border-blue-200/80 flex items-start gap-1.5">
+                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-blue-600" />
+                <span>SaaS Platform Users do not belong to any client company. They log into the Super Admin console and can only view modules permitted for their specific role.</span>
+              </p>
+            ) : (
+              <p className="mt-2.5 text-[11px] text-slate-600 font-medium bg-white p-2.5 rounded-lg border border-slate-200 flex items-start gap-1.5">
+                <Building2 className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-500" />
+                <span>Tenant users belong to a specific company and only manage their company's CRM resources.</span>
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -1255,31 +1337,37 @@ export function UsersListPage() {
                 onChange={(e) => setForm({ ...form, roleName: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm"
               >
-                {roles.map((r) => (
+                {(!form.organizationId ? SAAS_PLATFORM_ROLES : TENANT_ORG_ROLES).map((r) => (
                   <option key={r.id || r.name} value={r.id || r.name}>{r.display_name}</option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">Organization</label>
-              <select
-                value={form.organizationId}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setForm({
-                    ...form,
-                    organizationId: val,
-                    roleName: val ? (form.roleName === 'SUPER_ADMIN' ? 'ORG_ADMIN' : form.roleName) : 'SUPER_ADMIN'
-                  });
-                }}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm"
-              >
-                <option value="">None (Super Admin Platform)</option>
-                {organizations.map((o) => (
-                  <option key={o.id} value={o.id}>{o.name}</option>
-                ))}
-              </select>
-            </div>
+
+            {form.organizationId ? (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Tenant Organization <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  required
+                  value={form.organizationId}
+                  onChange={(e) => setForm({ ...form, organizationId: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm"
+                >
+                  <option value="" disabled>Select an Organization</option>
+                  {organizations.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Organization Scope</label>
+                <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-sm font-bold text-slate-500 select-none">
+                  None (SaaS Platform Staff)
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
@@ -1337,29 +1425,67 @@ export function UsersListPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">Role</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Role <span className="text-rose-500">*</span>
+              </label>
               <select
                 value={selectedUser.role_name || ''}
-                onChange={(e) => setSelectedUser({ ...selectedUser, role_name: e.target.value })}
+                onChange={(e) => {
+                  const newRole = e.target.value;
+                  const isPlatformRole = ['SUPER_ADMIN', 'FINANCE_ROLE', 'SUPPORT_ROLE', 'SALES_ROLE'].includes(newRole);
+                  setSelectedUser({
+                    ...selectedUser,
+                    role_name: newRole,
+                    organization_id: isPlatformRole ? null : (selectedUser.organization_id || (organizations[0]?.id || null))
+                  });
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm"
               >
-                {roles.map((r) => (
+                {(selectedUser.organization_id ? TENANT_ORG_ROLES : SAAS_PLATFORM_ROLES).map((r) => (
                   <option key={r.id || r.name} value={r.id || r.name}>{r.display_name}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">Organization</label>
-              <select
-                value={selectedUser.organization_id || ''}
-                onChange={(e) => setSelectedUser({ ...selectedUser, organization_id: e.target.value ? parseInt(e.target.value, 10) : null })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm"
-              >
-                <option value="">Platform (No Org)</option>
-                {organizations.map((o) => (
-                  <option key={o.id} value={o.id}>{o.name}</option>
-                ))}
-              </select>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Organization Scope</label>
+              {selectedUser.organization_id ? (
+                <select
+                  value={selectedUser.organization_id || ''}
+                  onChange={(e) => {
+                    const val = e.target.value ? parseInt(e.target.value, 10) : null;
+                    setSelectedUser({
+                      ...selectedUser,
+                      organization_id: val,
+                      role_name: val
+                        ? (['SUPER_ADMIN', 'FINANCE_ROLE', 'SUPPORT_ROLE', 'SALES_ROLE'].includes(selectedUser.role_name) ? 'ORG_ADMIN' : selectedUser.role_name)
+                        : (['ORG_ADMIN', 'ORG_MEMBER'].includes(selectedUser.role_name) ? 'SUPER_ADMIN' : selectedUser.role_name)
+                    });
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 transition-all shadow-sm"
+                >
+                  <option value="">Switch to None (SaaS Platform Staff)</option>
+                  {organizations.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-600 flex items-center justify-between">
+                  <span>None (Independent SaaS Platform Staff)</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedUser({
+                        ...selectedUser,
+                        organization_id: organizations[0]?.id || null,
+                        role_name: 'ORG_ADMIN'
+                      });
+                    }}
+                    className="text-[11px] text-blue-600 hover:text-blue-700 font-extrabold underline ml-2"
+                  >
+                    Assign to Tenant
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">

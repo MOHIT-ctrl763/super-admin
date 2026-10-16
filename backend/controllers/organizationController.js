@@ -218,10 +218,10 @@ exports.createOrganization = async (req, res) => {
     // Create or link Owner Admin user account
     const ownerCleanEmail = (ownerEmail || orgEmail).toLowerCase().trim();
     const existingUser = await query('SELECT id FROM users WHERE email = $1', [ownerCleanEmail]);
+    const ownerPass = req.body.ownerPassword || 'Company@123';
+    const hash = bcrypt.hashSync(ownerPass, 10);
     let userId;
     if (existingUser.rows.length === 0) {
-      const ownerPass = req.body.ownerPassword || 'Company@123';
-      const hash = bcrypt.hashSync(ownerPass, 10);
       const userRes = await query(`
         INSERT INTO users (name, email, password, phone, role_name, role_display_name, is_active, organization_id, organization_name)
         VALUES ($1, $2, $3, $4, 'ORG_ADMIN', 'Organization Admin', true, $5, $6)
@@ -239,21 +239,30 @@ exports.createOrganization = async (req, res) => {
       await query("INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [userId, roleLookup.rows[0].id]);
     }
 
-    // Auto-sync into crm_companies ledger so CRM immediately recognizes this organization
+    // Provision dedicated isolated workspace in CRM
+    let crmCompId = newOrg.crm_company_id;
+    if (!crmCompId) {
+      crmCompId = require('crypto').randomUUID();
+      await query('UPDATE organizations SET crm_company_id = $1 WHERE id = $2', [String(crmCompId), newOrg.id]);
+      newOrg.crm_company_id = crmCompId;
+    }
+    await query('UPDATE users SET crm_company_id = $1 WHERE id = $2', [String(crmCompId), userId]);
+
     try {
-      const crmCheck = await query('SELECT id FROM crm_companies WHERE email = $1 OR name = $2', [orgEmail, name]);
-      let crmCompId;
-      if (crmCheck.rows.length === 0) {
-        const insComp = await query(`
-          INSERT INTO crm_companies (name, email, phone, address, state, status, source)
-          VALUES ($1, $2, $3, $4, $5, 'ACTIVE', 'Organization Provisioned')
-          RETURNING id
-        `, [name, orgEmail, cleanPhone, city || '', state || 'Maharashtra']);
-        crmCompId = insComp.rows[0].id;
-      } else {
-        crmCompId = crmCheck.rows[0].id;
-      }
-      await query('UPDATE users SET crm_company_id = $1 WHERE id = $2', [String(crmCompId), userId]);
+      const crmProvisioningService = require('../services/crmProvisioningService');
+      await crmProvisioningService.provisionTenantInCrm({
+        companyId: crmCompId,
+        name,
+        email: orgEmail,
+        phone: cleanPhone,
+        address: city || '',
+        state: state || 'Maharashtra',
+        planId: planId || 2,
+        planName,
+        adminName: ownerName || 'Admin',
+        adminEmail: ownerCleanEmail,
+        adminPasswordHash: hash
+      });
     } catch (crmSyncErr) {
       console.warn('Auto CRM sync for organization skipped:', crmSyncErr.message);
     }
@@ -284,12 +293,20 @@ exports.createOrganization = async (req, res) => {
     await query(`
       INSERT INTO audit_logs (user_id, user_name, organization_id, action, module, details)
       VALUES ($1, $2, $3, 'CREATE_ORGANIZATION', 'ORGANIZATIONS', $4)
-    `, [req.user.id, req.user.name, newOrg.id, `Provisioned tenant ${name}`]);
+    `, [req.user.id, req.user.name, newOrg.id, `Provisioned tenant ${name} with CRM workspace ${crmCompId}`]);
 
     return res.status(201).json({
       success: true,
-      message: 'Organization created successfully',
-      data: newOrg
+      message: 'Organization created successfully and provisioned to CRM workspace',
+      data: {
+        ...newOrg,
+        crm_company_id: crmCompId,
+        adminCredentials: {
+          email: ownerCleanEmail,
+          temporaryPassword: ownerPass,
+          crmWorkspaceId: crmCompId
+        }
+      }
     });
   } catch (err) {
     return res.status(400).json({ success: false, message: err.message });
@@ -519,6 +536,9 @@ exports.deleteOrganization = async (req, res) => {
     await query('DELETE FROM organizations WHERE id = $1', [org.id]);
     await query('DELETE FROM saas_subscriptions WHERE organization_id = $1', [org.id]);
     await query('DELETE FROM saas_usage_metrics WHERE organization_id = $1', [org.id]);
+    if (org.crm_company_id) {
+      await query('DELETE FROM crm_companies WHERE id::text = $1', [org.crm_company_id]);
+    }
 
     await query(`
       INSERT INTO audit_logs (user_id, user_name, organization_id, action, module, details)

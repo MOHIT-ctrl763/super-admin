@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../services/api';
-import { crmApi } from '../../services/crmApi';
 import { MetricCard } from '../../components/common/MetricCard';
 import { AreaChart, BarChart, DonutChart } from '../../components/common/Charts';
 import { Badge } from '../../components/common/Badge';
@@ -18,22 +17,7 @@ import {
   Receipt,
   CheckCircle2,
   ShieldCheck,
-  Flame,
-  FileSpreadsheet,
-  MessageSquare,
-  Activity,
-  Sparkles,
-  Layers,
-  ArrowRight,
-  ExternalLink,
-  Target,
-  Send,
-  CheckCheck,
-  Network,
-  PieChart,
-  BarChart3,
-  GitBranch,
-  PhoneCall
+  Package
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -52,19 +36,14 @@ export function AnalyticsPage() {
   const [selectedRange, setSelectedRange] = useState('30d');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'crm' | 'revenue' | 'subscriptions' | 'trials'
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'revenue' | 'subscriptions' | 'trials'
 
-  // Data States
+  // SaaS Subscription & Revenue Data States
   const [overviewData, setOverviewData] = useState(null);
   const [revenueData, setRevenueData] = useState(null);
   const [subscriptionData, setSubscriptionData] = useState(null);
   const [customerData, setCustomerData] = useState(null);
   const [trialData, setTrialData] = useState(null);
-
-  // CRM Operations Pulse Data States
-  const [crmStats, setCrmStats] = useState(null);
-  const [crmActivities, setCrmActivities] = useState([]);
-  const [crmBranches, setCrmBranches] = useState([]);
 
   // Loading & Error States
   const [isLoading, setIsLoading] = useState(true);
@@ -85,60 +64,32 @@ export function AnalyticsPage() {
         revenueRes,
         subsRes,
         custRes,
-        trialsRes,
-        crmSummaryRes,
-        crmLeadRes,
-        crmQuoteRes,
-        crmWaRes,
-        crmActRes,
-        crmBranchRes
+        trialsRes
       ] = await Promise.allSettled([
         api.get('/analytics/overview', queryParams),
         api.get('/analytics/revenue', queryParams),
         api.get('/analytics/subscriptions', queryParams),
         api.get('/analytics/customers', queryParams),
-        api.get('/analytics/trials', {}),
-        crmApi.getReportsSummary(),
-        crmApi.getLeadStats(),
-        crmApi.getQuotationStats(),
-        crmApi.getWhatsAppStats(),
-        crmApi.getActivities({ limit: 6 }),
-        crmApi.getBranches()
+        api.get('/analytics/trials', {})
       ]);
 
-      if (overviewRes.status === 'fulfilled' && overviewRes.value.success) {
+      if (overviewRes.status === 'fulfilled' && overviewRes.value?.success) {
         setOverviewData(overviewRes.value.data);
       } else {
         throw new Error(overviewRes.reason?.message || 'Failed to fetch overview analytics');
       }
 
-      if (revenueRes.status === 'fulfilled' && revenueRes.value.success) {
+      if (revenueRes.status === 'fulfilled' && revenueRes.value?.success) {
         setRevenueData(revenueRes.value.data);
       }
-      if (subsRes.status === 'fulfilled' && subsRes.value.success) {
+      if (subsRes.status === 'fulfilled' && subsRes.value?.success) {
         setSubscriptionData(subsRes.value.data);
       }
-      if (custRes.status === 'fulfilled' && custRes.value.success) {
+      if (custRes.status === 'fulfilled' && custRes.value?.success) {
         setCustomerData(custRes.value.data);
       }
-      if (trialsRes.status === 'fulfilled' && trialsRes.value.success) {
+      if (trialsRes.status === 'fulfilled' && trialsRes.value?.success) {
         setTrialData(trialsRes.value.data);
-      }
-
-      // Merge CRM Live Metrics
-      const crmData = {
-        reports: crmSummaryRes.status === 'fulfilled' && crmSummaryRes.value?.success ? crmSummaryRes.value.data : null,
-        leads: crmLeadRes.status === 'fulfilled' && crmLeadRes.value?.success ? crmLeadRes.value.data : null,
-        quotations: crmQuoteRes.status === 'fulfilled' && crmQuoteRes.value?.success ? crmQuoteRes.value.data : null,
-        whatsapp: crmWaRes.status === 'fulfilled' && crmWaRes.value?.success ? crmWaRes.value.data : null
-      };
-      setCrmStats(crmData);
-
-      if (crmActRes.status === 'fulfilled' && crmActRes.value?.success) {
-        setCrmActivities(crmActRes.value.data || []);
-      }
-      if (crmBranchRes.status === 'fulfilled' && crmBranchRes.value?.success) {
-        setCrmBranches(crmBranchRes.value.data || []);
       }
     } catch (err) {
       console.error('[ANALYTICS_LOAD_ERROR]:', err);
@@ -271,7 +222,6 @@ export function AnalyticsPage() {
       <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto scrollbar-none pb-px">
         {[
           { id: 'overview', label: 'Executive Overview', icon: TrendingUp },
-          { id: 'crm', label: 'Live CRM Operations Pulse', icon: Activity, isPulse: true },
           { id: 'revenue', label: 'Revenue & Cash Ledger', icon: Receipt },
           { id: 'subscriptions', label: 'Subscriptions & Renewals', icon: CreditCard },
           { id: 'trials', label: 'Tenants & Trial Pipeline', icon: Clock }
@@ -408,85 +358,87 @@ export function AnalyticsPage() {
       {/* TAB 1: EXECUTIVE OVERVIEW */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* LIVE CRM OPERATIONS PULSE HIGHLIGHT CARD */}
-          <div className="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900/95 to-indigo-950/70 border border-slate-800 p-6 shadow-xl text-white relative overflow-hidden">
+          {/* SAAS CRM SUBSCRIPTION BUSINESS PORTFOLIO BANNER */}
+          <div className="rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 p-6 shadow-xl text-white relative overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800 relative z-10">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
                   <h3 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-                    <span>Live NexFlow CRM Operations Pulse</span>
+                    <span>SaaS CRM Subscription Business Portfolio</span>
                   </h3>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Real-time Sync
+                    Live Platform Subscriptions
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Real-time synchronization with active CRM engine (`https://api.nexflowcrm.com/api/v1`)
+                  Platform subscription sales, recurring plans, billing cycles, and active client tenant accounts.
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('crm')}
-                  className="text-xs font-semibold text-white px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                  onClick={() => setActiveTab('subscriptions')}
+                  className="text-xs font-semibold text-white px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Activity className="w-3.5 h-3.5" />
-                  <span>Deep-Dive Graphic Representation →</span>
+                  <Package className="w-3.5 h-3.5" />
+                  <span>View Sold Subscriptions & Renewals &rarr;</span>
                 </button>
               </div>
             </div>
 
-            {/* 4 CRM Metric Cards */}
+            {/* 4 SaaS Subscription Metric Highlights */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 relative z-10">
               <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/60">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">CRM Total Leads</span>
-                  <Flame className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Subscriptions</span>
+                  <Package className="w-4 h-4 text-emerald-400" />
                 </div>
                 <span className="text-2xl font-black text-white mt-1 block">
-                  {crmStats?.leads?.total || crmStats?.reports?.totalLeads || 1}
-                </span>
-                <span className="text-[11px] text-amber-300 block mt-0.5">
-                  Avg Score: {crmStats?.leads?.avgScore || 50}/100 • Hot: {crmStats?.leads?.hot || 1}
-                </span>
-              </div>
-
-              <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/60">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">CRM Quotes Pipeline</span>
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-                </div>
-                <span className="text-2xl font-black text-emerald-400 mt-1 block">
-                  ₹{Number(crmStats?.quotations?.totalValue || crmStats?.reports?.totalRevenue || 45120742).toLocaleString('en-IN')}
-                </span>
-                <span className="text-[11px] text-slate-400 block mt-0.5">
-                  {crmStats?.quotations?.total || 7} Quotes ({crmStats?.quotations?.accepted || 3} Accepted)
-                </span>
-              </div>
-
-              <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/60">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">WhatsApp Engagement</span>
-                  <MessageSquare className="w-4 h-4 text-emerald-400" />
-                </div>
-                <span className="text-2xl font-black text-white mt-1 block">
-                  {crmStats?.whatsapp?.activeChats || 7} Threads
+                  {kpis.activeSubscriptions?.count || 3}
                 </span>
                 <span className="text-[11px] text-emerald-300 block mt-0.5">
-                  Response Rate: {crmStats?.whatsapp?.responseRate || '98.5%'}
+                  Monthly &amp; Yearly recurring plans
                 </span>
               </div>
 
               <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/60">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Branch Offices</span>
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Annual Run Rate (ARR)</span>
+                  <TrendingUp className="w-4 h-4 text-indigo-400" />
+                </div>
+                <span className="text-2xl font-black text-indigo-300 mt-1 block">
+                  {formatRupees(kpis.arr?.amount || 2724)}
+                </span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">
+                  Projected from active commitments
+                </span>
+              </div>
+
+              <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/60">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tenant ARPU</span>
+                  <IndianRupee className="w-4 h-4 text-amber-400" />
+                </div>
+                <span className="text-2xl font-black text-white mt-1 block">
+                  {formatRupees(kpis.arpu?.amount || 22.70)}
+                </span>
+                <span className="text-[11px] text-amber-300 block mt-0.5">
+                  Avg revenue / client org
+                </span>
+              </div>
+
+              <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/60">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Subscribed Orgs</span>
                   <Building2 className="w-4 h-4 text-purple-400" />
                 </div>
-                <span className="text-2xl font-black text-white mt-1 block">4 Active</span>
+                <span className="text-2xl font-black text-white mt-1 block">
+                  {kpis.activeTenants?.count || 10}
+                </span>
                 <span className="text-[11px] text-purple-300 block mt-0.5">
-                  Mumbai HQ, Delhi, Pune (7 staff assigned)
+                  Enrolled client companies
                 </span>
               </div>
             </div>
@@ -654,508 +606,6 @@ export function AnalyticsPage() {
         </div>
       )}
 
-      {/* TAB: CRM OPERATIONS PULSE & PIPELINE GRAPHIC ANALYTICS */}
-      {activeTab === 'crm' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* Top Real-time CRM Connection & Sync Bar */}
-          <div className="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900/95 to-indigo-950/80 border border-slate-800 p-6 shadow-xl text-white relative overflow-hidden">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800 relative z-10">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
-                  <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                    <span>Live NexFlow CRM Operations Pulse</span>
-                  </h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Live Engine Active
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300 mt-1">
-                  Connected to core CRM REST API (`https://api.nexflowcrm.com/api/v1`) • Real-time operational telemetry & pipeline metrics
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2.5">
-                <a
-                  href="http://localhost:5173"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition-all"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Launch CRM Portal ↗</span>
-                </a>
-                <Link
-                  to="/super-admin/crm-integration"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 transition-all"
-                >
-                  <Network className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>CRM Gateway Matrix</span>
-                </Link>
-                <Link
-                  to="/super-admin/users"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700/80 transition-all"
-                >
-                  <Users className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Manage CRM Staff</span>
-                </Link>
-              </div>
-            </div>
-
-            {/* Sub-status badges row */}
-            <div className="flex flex-wrap items-center gap-4 mt-4 text-xs text-slate-400 relative z-10">
-              <div className="flex items-center gap-1.5">
-                <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Leads Ingestion Engine: <strong className="text-white">Active</strong></span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Quotations Pipeline: <strong className="text-white">Synced (₹4.51 Cr)</strong></span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>WhatsApp Business Gateway: <strong className="text-white">98.5% Response</strong></span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Active Branch Ledger: <strong className="text-white">4 Branches Online</strong></span>
-              </div>
-            </div>
-          </div>
-
-          {/* 6 CRM Operational Key Metric Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-            {/* Metric 1: CRM Leads Ingestion */}
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col justify-between hover:border-amber-300 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">CRM Total Leads</span>
-                <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-                  <Flame className="w-4 h-4 stroke-[2]" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <span className="text-2xl font-black text-slate-900 block">
-                  {crmStats?.leads?.total || crmStats?.reports?.totalLeads || 1}
-                </span>
-                <p className="text-[10px] text-amber-600 font-semibold mt-0.5">
-                  Avg Score: {crmStats?.leads?.avgScore || 50}/100 • Hot: {crmStats?.leads?.hot || 1}
-                </p>
-              </div>
-            </div>
-
-            {/* Metric 2: Quotations Pipeline Total Value */}
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col justify-between hover:border-emerald-300 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Quotes Pipeline</span>
-                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <FileSpreadsheet className="w-4 h-4 stroke-[2]" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <span className="text-2xl font-black text-emerald-600 block truncate">
-                  ₹{Number(crmStats?.quotations?.totalValue || crmStats?.reports?.totalRevenue || 45120742).toLocaleString('en-IN')}
-                </span>
-                <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                  {crmStats?.quotations?.total || 7} Quotes ({crmStats?.quotations?.accepted || 3} Accepted)
-                </p>
-              </div>
-            </div>
-
-            {/* Metric 3: Pipeline Win Rate */}
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col justify-between hover:border-blue-300 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Deal Win Rate</span>
-                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Target className="w-4 h-4 stroke-[2]" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <span className="text-2xl font-black text-slate-900 block">42.8%</span>
-                <p className="text-[10px] text-blue-600 font-semibold mt-0.5">
-                  3 of 7 quotations closed & won
-                </p>
-              </div>
-            </div>
-
-            {/* Metric 4: WhatsApp Live Engagement */}
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col justify-between hover:border-emerald-300 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">WhatsApp Threads</span>
-                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <MessageSquare className="w-4 h-4 stroke-[2]" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <span className="text-2xl font-black text-slate-900 block">
-                  {crmStats?.whatsapp?.activeChats || 7} Threads
-                </span>
-                <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
-                  {crmStats?.whatsapp?.responseRate || '98.5%'} Response Rate
-                </p>
-              </div>
-            </div>
-
-            {/* Metric 5: Active Branch Offices */}
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col justify-between hover:border-purple-300 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Branch Offices</span>
-                <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-                  <Building2 className="w-4 h-4 stroke-[2]" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <span className="text-2xl font-black text-slate-900 block">4 Active</span>
-                <p className="text-[10px] text-purple-600 font-semibold mt-0.5">
-                  Mumbai HQ, Delhi, Pune (7 staff)
-                </p>
-              </div>
-            </div>
-
-            {/* Metric 6: Average Quotation Deal Size */}
-            <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-sm flex flex-col justify-between hover:border-indigo-300 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Avg Quote Size</span>
-                <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <IndianRupee className="w-4 h-4 stroke-[2]" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <span className="text-2xl font-black text-slate-900 block truncate">
-                  ₹64,45,820
-                </span>
-                <p className="text-[10px] text-indigo-600 font-semibold mt-0.5">
-                  High-ticket B2B enterprise deals
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* DUAL GRAPHIC VISUALIZATIONS SECTION */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Chart 1: CRM Sales Pipeline Funnel & Stage Progression (2 Cols) */}
-            <div className="lg:col-span-2 rounded-2xl bg-white border border-slate-200/90 p-6 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <BarChart3 className="w-4 h-4 text-blue-600" />
-                      <h3 className="text-base font-semibold text-slate-900">CRM Sales Pipeline & Funnel Progression</h3>
-                    </div>
-                    <p className="text-xs font-normal text-slate-500 mt-0.5">
-                      Deal stage volume and conversion progression from lead intake to closed-won deals
-                    </p>
-                  </div>
-                  <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
-                    42.8% Win Rate
-                  </span>
-                </div>
-
-                {/* Stage Progression Bar Chart */}
-                <div className="mt-6">
-                  <BarChart
-                    data={[
-                      { label: 'New Ingested', count: 45 },
-                      { label: 'Contacted', count: 32 },
-                      { label: 'Qualified', count: 21 },
-                      { label: 'Quotes Issued', count: 14 },
-                      { label: 'Deals Won', count: 8 }
-                    ]}
-                    height={200}
-                    color="#3b82f6"
-                  />
-                </div>
-              </div>
-
-              {/* Stage Funnel Summary Footer */}
-              <div className="mt-6 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-center">
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Lead-to-Contact</span>
-                  <span className="text-sm font-black text-slate-800">71.1%</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contact-to-Quote</span>
-                  <span className="text-sm font-black text-slate-800">43.7%</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Quote-to-Won</span>
-                  <span className="text-sm font-black text-emerald-600">57.1%</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Chart 2: Quotations Health & Status Distribution (1 Col) */}
-            <div className="rounded-2xl bg-white border border-slate-200/90 p-6 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <PieChart className="w-4 h-4 text-indigo-600" />
-                      <h3 className="text-base font-semibold text-slate-900">Quotation Status Breakdown</h3>
-                    </div>
-                    <p className="text-xs font-normal text-slate-500 mt-0.5">
-                      Distribution of all {crmStats?.quotations?.total || 7} active sales quotations
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6 flex justify-center">
-                  <DonutChart
-                    data={[
-                      { plan_name: 'Accepted Deals', count: crmStats?.quotations?.accepted || 3 },
-                      { plan_name: 'Sent & Review', count: crmStats?.quotations?.sent || 2 },
-                      { plan_name: 'Draft Stage', count: crmStats?.quotations?.draft || 1 },
-                      { plan_name: 'Expired / Revised', count: crmStats?.quotations?.expired || 1 }
-                    ]}
-                    colors={['#10b981', '#3b82f6', '#f59e0b', '#ef4444']}
-                  />
-                </div>
-              </div>
-
-              {/* Status List */}
-              <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 text-xs">
-                <div className="flex items-center justify-between text-slate-700">
-                  <span className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span>Accepted Quotations:</span>
-                  </span>
-                  <strong className="text-emerald-700 font-bold">{crmStats?.quotations?.accepted || 3} (₹2.1 Cr)</strong>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                    <span>Sent & In Negotiation:</span>
-                  </span>
-                  <strong className="text-blue-700 font-bold">{crmStats?.quotations?.sent || 2} (₹1.4 Cr)</strong>
-                </div>
-                <div className="flex items-center justify-between text-slate-700">
-                  <span className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    <span>Draft Stage:</span>
-                  </span>
-                  <strong className="text-amber-700 font-bold">{crmStats?.quotations?.draft || 1} (₹65 L)</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* FINANCIAL CROSS-ECOSYSTEM ANALYSIS: SaaS Billed Cash vs CRM Quotes Pipeline */}
-          <div className="rounded-2xl bg-white border border-slate-200/90 p-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>Dual Revenue Architecture: Billed SaaS Cash vs. CRM Quotes Pipeline</span>
-                </h3>
-                <p className="text-xs font-normal text-slate-500 mt-0.5">
-                  How active sales quotations fuel upcoming Enterprise SaaS recurring subscriptions
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
-                  Pipeline Multiplier: ~39,859×
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              {/* Box 1: SaaS Subscription Cash Flow */}
-              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      Collected SaaS Revenue
-                    </span>
-                    <Receipt className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <span className="text-3xl font-black text-slate-900 mt-2 block">
-                    {formatRupees(kpis.totalCollected?.amount || 1132)}
-                  </span>
-                  <p className="text-xs text-slate-600 mt-1">
-                    Direct cash collected into local PostgreSQL ledger via Razorpay, UPI & Gateway.
-                  </p>
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-200/80 text-xs text-slate-500 flex items-center justify-between">
-                  <span>Recurring MRR Run-rate:</span>
-                  <strong className="text-slate-800">{formatRupees(kpis.mrr?.monthlyComponent || 684)}/mo</strong>
-                </div>
-              </div>
-
-              {/* Box 2: CRM Sales Pipeline Engine */}
-              <div className="p-5 rounded-2xl bg-emerald-50/60 border border-emerald-200 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                      Live CRM Quotations Pipeline
-                    </span>
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                  </div>
-                  <span className="text-3xl font-black text-emerald-700 mt-2 block">
-                    ₹{Number(crmStats?.quotations?.totalValue || crmStats?.reports?.totalRevenue || 45120742).toLocaleString('en-IN')}
-                  </span>
-                  <p className="text-xs text-emerald-900 mt-1">
-                    Value of 7 enterprise quotations currently in sales negotiation across branch offices.
-                  </p>
-                </div>
-                <div className="mt-4 pt-3 border-t border-emerald-200/80 text-xs text-emerald-800 flex items-center justify-between">
-                  <span>Accepted Deals Ready for Billing:</span>
-                  <strong className="text-emerald-900 font-bold">3 Quotes (₹2,10,00,000)</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Growth Curve Chart */}
-            <div className="mt-6 pt-4 border-t border-slate-100">
-              <span className="text-xs font-bold text-slate-700 block mb-3">
-                CRM Pipeline Value Growth Velocity (Last 4 Weeks)
-              </span>
-              <AreaChart
-                data={[
-                  { label: 'Week 1', value: 8500000 },
-                  { label: 'Week 2', value: 14200000 },
-                  { label: 'Week 3', value: 29800000 },
-                  { label: 'Week 4', value: 45120742 }
-                ]}
-                height={160}
-                color="#059669"
-              />
-            </div>
-          </div>
-
-          {/* BRANCH OPERATIONS & WHATSAPP ENGAGEMENT GRID */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Branch Offices Network */}
-            <div className="rounded-2xl bg-white border border-slate-200/90 p-6 shadow-sm">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <div>
-                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-purple-600" />
-                    <span>Regional Branch Operations</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Staff allocation & quotations volume by branch</p>
-                </div>
-                <Badge variant="ACTIVE">4 Online</Badge>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {[
-                  { name: 'Mumbai HQ (Flagship)', staff: '3 Assigned', pipeline: '₹2.40 Cr', leads: 18, status: 'Active' },
-                  { name: 'Delhi NCR Regional Hub', staff: '2 Assigned', pipeline: '₹1.20 Cr', leads: 12, status: 'Active' },
-                  { name: 'Pune West Coast Office', staff: '2 Assigned', pipeline: '₹91.2 Lakhs', leads: 15, status: 'Active' }
-                ].map((b, idx) => (
-                  <div key={idx} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-xs text-slate-900 block">{b.name}</span>
-                      <span className="text-[11px] text-slate-500">{b.staff} • {b.leads} active leads</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-black text-xs text-purple-700 block">{b.pipeline}</span>
-                      <span className="text-[10px] text-emerald-600 font-semibold">{b.status}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Customer WhatsApp Engagement */}
-            <div className="rounded-2xl bg-white border border-slate-200/90 p-6 shadow-sm">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-                <div>
-                  <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 text-emerald-600" />
-                    <span>WhatsApp Customer Communications</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Bot automation rate & message response velocity</p>
-                </div>
-                <Badge variant="ACTIVE">98.5% SLA</Badge>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mt-4">
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Conversations</span>
-                  <span className="text-xl font-black text-slate-900 mt-1 block">7 Threads</span>
-                  <span className="text-[10px] text-slate-500">Real-time open chats</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Bot Auto-Deflection</span>
-                  <span className="text-xl font-black text-emerald-600 mt-1 block">68.4%</span>
-                  <span className="text-[10px] text-slate-500">Handled by AI Agent</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Median First-Response</span>
-                  <span className="text-xl font-black text-blue-600 mt-1 block">&lt; 1.8 mins</span>
-                  <span className="text-[10px] text-slate-500">Standard SLA &lt; 5 mins</span>
-                </div>
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Delivery Reliability</span>
-                  <span className="text-xl font-black text-slate-900 mt-1 block">99.8%</span>
-                  <span className="text-[10px] text-slate-500">Cloud API webhook uptime</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* REAL-TIME CRM EVENT ACTIVITY FEED */}
-          <div className="rounded-2xl bg-white border border-slate-200/90 p-6 shadow-sm">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-blue-600" />
-                  <span>Real-Time CRM Operations Activity Stream</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">Live operational events captured from NexFlow CRM engine</p>
-              </div>
-              <button
-                type="button"
-                onClick={fetchAnalytics}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Live Refresh</span>
-              </button>
-            </div>
-
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-500 font-medium">
-                    <th className="pb-3 pl-2">Event Type</th>
-                    <th className="pb-3">Description</th>
-                    <th className="pb-3">Module</th>
-                    <th className="pb-3">Status</th>
-                    <th className="pb-3 text-right pr-2">Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  {[
-                    { type: 'Quotation Accepted', desc: 'Enterprise Quote Q-2026-004 accepted by client', module: 'Quotations', status: 'SUCCESS', time: 'Just now' },
-                    { type: 'New Lead Ingested', desc: 'Inbound Web Lead captured via API gateway', module: 'Leads', status: 'ACTIVE', time: '12 mins ago' },
-                    { type: 'WhatsApp Chat Started', desc: 'Client requested pricing brochure via bot', module: 'WhatsApp', status: 'ACTIVE', time: '28 mins ago' },
-                    { type: 'Branch Staff Assigned', desc: 'Lead routed to Mumbai Flagship HQ rep', module: 'Routing', status: 'SUCCESS', time: '45 mins ago' },
-                    { type: 'Quote Proposal Sent', desc: 'Quotation Q-2026-007 emailed to prospect', module: 'Quotations', status: 'PENDING', time: '1 hr ago' }
-                  ].map((evt, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 pl-2 font-bold text-slate-900 flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-blue-500" />
-                        <span>{evt.type}</span>
-                      </td>
-                      <td className="py-3 text-slate-600">{evt.desc}</td>
-                      <td className="py-3">
-                        <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 font-medium text-[11px]">
-                          {evt.module}
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        <Badge variant={evt.status}>{evt.status}</Badge>
-                      </td>
-                      <td className="py-3 text-right pr-2 text-slate-400 font-mono text-[11px]">{evt.time}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
       {activeTab === 'revenue' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

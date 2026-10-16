@@ -6,6 +6,7 @@
 const bcrypt = require('bcryptjs');
 const crmApiService = require('../services/crmApiService');
 const { query } = require('../db/database');
+const { createTenantCrmToken } = require('../services/crmProvisioningService');
 
 /**
  * Helper to resolve the authenticated caller's company/tenant scope
@@ -16,6 +17,27 @@ function getCallerTenantScope(req) {
   const companyName = req.user?.organization_name || null;
   const userEmail = req.user?.email ? req.user.email.toLowerCase().trim() : null;
   return { isSuperAdmin, companyId, companyName, userEmail };
+}
+
+/**
+ * Helper to generate tenant-scoped CRM API options for requests
+ */
+function getTenantApiOptions(req) {
+  const scope = getCallerTenantScope(req);
+  if (!scope.isSuperAdmin && scope.companyId) {
+    try {
+      const token = createTenantCrmToken({
+        userId: req.user?.id,
+        email: scope.userEmail || 'tenant@crm.local',
+        companyId: scope.companyId,
+        role: req.user?.role_name || 'admin'
+      });
+      return { token, scope };
+    } catch (e) {
+      return { token: null, scope };
+    }
+  }
+  return { token: null, scope };
 }
 
 /**
@@ -486,6 +508,28 @@ exports.createCompany = async (req, res) => {
       }
     } catch (orgSyncErr) {
       console.warn('Auto SaaS org provisioning for CRM company:', orgSyncErr.message);
+    }
+
+    // 2c. Provision company and isolated workspace directly in CRM Database with unique company_id
+    try {
+      const crmProvisioningService = require('../services/crmProvisioningService');
+      await crmProvisioningService.provisionTenantInCrm({
+        companyId: createdCompany.id,
+        name: createdCompany.name,
+        email: loginEmail || createdCompany.email,
+        phone: createdCompany.phone || '',
+        address: createdCompany.address || '',
+        state: createdCompany.state || 'Maharashtra',
+        stateCode: createdCompany.state_code || '27',
+        planId: assignedPlanId,
+        planName: assignedPlanName,
+        adminName: name.trim() + ' Admin',
+        adminEmail: loginEmail,
+        adminPasswordHash: bcrypt.hashSync(adminPassword, 10)
+      });
+      console.log(`[CRM_TENANT_PROVISION] Tenant workspace created in CRM database for ${createdCompany.name} (UUID: ${createdCompany.id})`);
+    } catch (directProvisionErr) {
+      console.warn('[CRM_TENANT_PROVISION_WARN] Direct CRM DB provisioning:', directProvisionErr.message);
     }
 
     // 3. Automatically provision Company Admin account so this company can log in to CRM
@@ -1338,36 +1382,94 @@ exports.getRoleStats = async (req, res) => {
 
 exports.getLeads = async (req, res) => {
   try {
-    const { isSuperAdmin, companyId, companyName } = getCallerTenantScope(req);
-    const result = await crmApiService.getLeads(req.query);
-    if (!result.success) {
-      return res.json({
-        success: false,
-        crmAuthRequired: result.crmAuthRequired || false,
-        message: result.message || 'CRM leads request failed',
-        data: { items: [], total: 0 }
+    const { token, scope } = getTenantApiOptions(req);
+    const { isSuperAdmin, companyId, companyName } = scope;
+    const options = token ? { token } : {};
+
+    // 1. Fetch leads from CRM PostgreSQL database
+    let localItems = [];
+    try {
+      const { Client } = require('pg');
+      const crmClient = new Client({
+        host: process.env.CRM_DB_HOST || process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.CRM_DB_PORT || process.env.DB_PORT || '5432', 10),
+        user: process.env.CRM_DB_USER || process.env.DB_USER || 'postgres',
+        password: process.env.CRM_DB_PASSWORD || process.env.DB_PASSWORD || '798214',
+        database: process.env.CRM_DB_NAME || 'CRM'
       });
+      await crmClient.connect();
+
+      let q = `SELECT * FROM public.leads`;
+      let params = [];
+      if (!isSuperAdmin) {
+        q += ` WHERE company_id::text = $1`;
+        params.push(companyId || '0');
+      }
+      q += ` ORDER BY created_at DESC LIMIT 100`;
+
+      const dbRes = await crmClient.query(q, params);
+      localItems = dbRes.rows.map(r => ({
+        id: r.id,
+        name: r.name,
+        company: r.company,
+        email: r.email,
+        phone: r.phone,
+        stage: r.stage || 'NEW',
+        priority: r.priority || 'MEDIUM',
+        source: r.source || 'Direct',
+        score: r.score || 50,
+        company_id: r.company_id,
+        companyId: r.company_id,
+        createdAt: r.created_at,
+        created_at: r.created_at
+      }));
+      await crmClient.end();
+    } catch (dbErr) {
+      // Graceful fallback
     }
 
-    // Tenant isolation on leads
-    if (!isSuperAdmin && result.data?.items) {
-      const filtered = result.data.items.filter(item => {
+    // 2. Fetch leads from remote CRM API
+    let remoteItems = [];
+    try {
+      const result = await crmApiService.getLeads(req.query, options);
+      if (result.success && result.data) {
+        remoteItems = Array.isArray(result.data) ? result.data : (result.data.items || []);
+      }
+    } catch (e) {}
+
+    // 3. Merge deduplicated
+    const combined = [...localItems];
+    for (const remote of remoteItems) {
+      const exists = combined.some(i => String(i.id) === String(remote.id));
+      if (!exists) {
+        combined.push(remote);
+      }
+    }
+
+    // Strict Tenant isolation filter
+    if (!isSuperAdmin) {
+      const filtered = combined.filter(item => {
         const cId = String(item.companyId || item.company_id || '');
         const cName = String(item.companyName || item.company_name || '');
         return (companyId && cId === companyId) ||
                (companyName && cName.toLowerCase() === companyName.toLowerCase());
       });
       return res.json({
-        ...result,
+        success: true,
         data: {
-          ...result.data,
           items: filtered,
           total: filtered.length
         }
       });
     }
 
-    return res.json(result);
+    return res.json({
+      success: true,
+      data: {
+        items: combined,
+        total: combined.length
+      }
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1375,9 +1477,14 @@ exports.getLeads = async (req, res) => {
 
 exports.getLeadStats = async (req, res) => {
   try {
-    const { isSuperAdmin, companyId, companyName } = getCallerTenantScope(req);
+    const { token, scope } = getTenantApiOptions(req);
+    const { isSuperAdmin } = scope;
+    const options = token ? { token } : {};
+    const result = await crmApiService.getLeadStats(options);
+    if (result.success) {
+      return res.json(result);
+    }
     if (!isSuperAdmin) {
-      // Dedicated fresh clean metrics for this tenant company
       return res.json({
         success: true,
         data: {
@@ -1391,7 +1498,6 @@ exports.getLeadStats = async (req, res) => {
         }
       });
     }
-    const result = await crmApiService.getLeadStats();
     return res.status(result.status || 200).json(result);
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -1400,7 +1506,54 @@ exports.getLeadStats = async (req, res) => {
 
 exports.getLeadById = async (req, res) => {
   try {
-    const result = await crmApiService.getLeadById(req.params.id);
+    const { token, scope } = getTenantApiOptions(req);
+    const options = token ? { token } : {};
+    const result = await crmApiService.getLeadById(req.params.id, options);
+    if (!scope.isSuperAdmin && result.success && result.data) {
+      const lead = result.data;
+      const cId = String(lead.companyId || lead.company_id || '');
+      if (scope.companyId && cId && cId !== scope.companyId) {
+        return res.status(403).json({ success: false, message: 'Forbidden: You cannot access leads belonging to another company.' });
+      }
+    }
+    return res.status(result.status || 200).json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.createLead = async (req, res) => {
+  try {
+    const { token, scope } = getTenantApiOptions(req);
+    const leadData = { ...req.body };
+    if (!scope.isSuperAdmin && scope.companyId) {
+      leadData.company_id = scope.companyId;
+      leadData.companyId = scope.companyId;
+    }
+    const options = token ? { token } : {};
+    const result = await crmApiService.createLead(leadData, options);
+    return res.status(result.status || 200).json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.updateLead = async (req, res) => {
+  try {
+    const { token, scope } = getTenantApiOptions(req);
+    const options = token ? { token } : {};
+    const result = await crmApiService.updateLead(req.params.id, req.body, options);
+    return res.status(result.status || 200).json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.deleteLead = async (req, res) => {
+  try {
+    const { token, scope } = getTenantApiOptions(req);
+    const options = token ? { token } : {};
+    const result = await crmApiService.deleteLead(req.params.id, options);
     return res.status(result.status || 200).json(result);
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

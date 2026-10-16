@@ -119,7 +119,7 @@ class CrmApiService {
 
     // Attach Bearer token if not explicitly provided and not skipping auth
     if (!headers['Authorization'] && !options.skipAuth) {
-      const token = await this.getActiveToken();
+      const token = options.token || (await this.getActiveToken());
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -309,7 +309,7 @@ class CrmApiService {
   /**
    * Fetch company users across all companies via GET /auth/company-users/all
    */
-  async getCompanyUsers(params = {}) {
+  async getCompanyUsers(params = {}, options = {}) {
     let endpoint = '/auth/company-users/all';
     const queryParts = [];
     if (params.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
@@ -322,23 +322,24 @@ class CrmApiService {
       endpoint += `?${queryParts.join('&')}`;
     }
 
-    return this.request(endpoint);
+    return this.request(endpoint, options);
   }
 
   /**
    * Fetch single company user by ID via GET /auth/company-user/:id
    */
-  async getCompanyUserById(id) {
-    return this.request(`/auth/company-user/${id}`);
+  async getCompanyUserById(id, options = {}) {
+    return this.request(`/auth/company-user/${id}`, options);
   }
 
   /**
    * Create company user via POST /auth/company-user/create
    */
-  async createCompanyUser(userData) {
+  async createCompanyUser(userData, options = {}) {
     return this.request('/auth/company-user/create', {
       method: 'POST',
-      body: userData
+      body: userData,
+      ...options
     });
   }
 
@@ -727,43 +728,46 @@ class CrmApiService {
   /**
    * Fetch lead statistics via GET /leads/stats
    */
-  async getLeadStats() {
-    return this.request('/leads/stats');
+  async getLeadStats(options = {}) {
+    return this.request('/leads/stats', options);
   }
 
   /**
    * Fetch single lead details via GET /leads/:id
    */
-  async getLeadById(id) {
-    return this.request(`/leads/${id}`);
+  async getLeadById(id, options = {}) {
+    return this.request(`/leads/${id}`, options);
   }
 
   /**
    * Create lead via POST /leads
    */
-  async createLead(leadData) {
+  async createLead(leadData, options = {}) {
     return this.request('/leads', {
       method: 'POST',
-      body: leadData
+      body: leadData,
+      ...options
     });
   }
 
   /**
    * Update lead via PATCH /leads/:id
    */
-  async updateLead(id, leadData) {
+  async updateLead(id, leadData, options = {}) {
     return this.request(`/leads/${id}`, {
       method: 'PATCH',
-      body: leadData
+      body: leadData,
+      ...options
     });
   }
 
   /**
    * Delete lead via DELETE /leads/:id
    */
-  async deleteLead(id) {
+  async deleteLead(id, options = {}) {
     return this.request(`/leads/${id}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      ...options
     });
   }
 
@@ -943,41 +947,41 @@ class CrmApiService {
   /**
    * Fetch projects via GET /projects
    */
-  async getProjects(params = {}) {
+  async getProjects(params = {}, options = {}) {
     let endpoint = '/projects';
     const queryParts = [];
     if (params.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
     if (params.category) queryParts.push(`category=${encodeURIComponent(params.category)}`);
     if (queryParts.length > 0) endpoint += `?${queryParts.join('&')}`;
-    return this.request(endpoint);
+    return this.request(endpoint, options);
   }
 
   /**
    * Fetch single project by ID via GET /projects/:id
    */
-  async getProjectById(id) {
-    return this.request(`/projects/${id}`);
+  async getProjectById(id, options = {}) {
+    return this.request(`/projects/${id}`, options);
   }
 
   /**
    * Fetch project units / inventory stock via GET /projects/:id/inventory
    */
-  async getProjectInventory(projectId) {
-    return this.request(`/projects/${projectId}/inventory`);
+  async getProjectInventory(projectId, options = {}) {
+    return this.request(`/projects/${projectId}/inventory`, options);
   }
 
   /**
    * Fetch project tasks via GET /projects/:id/tasks
    */
-  async getProjectTasks(projectId) {
-    return this.request(`/projects/${projectId}/tasks`);
+  async getProjectTasks(projectId, options = {}) {
+    return this.request(`/projects/${projectId}/tasks`, options);
   }
 
   /**
    * Fetch project file attachments via GET /projects/:id/documents
    */
-  async getProjectDocuments(projectId) {
-    return this.request(`/projects/${projectId}/documents`);
+  async getProjectDocuments(projectId, options = {}) {
+    return this.request(`/projects/${projectId}/documents`, options);
   }
 
   // ==========================================
@@ -987,34 +991,34 @@ class CrmApiService {
   /**
    * Fetch quotations via GET /quotations
    */
-  async getQuotations(params = {}) {
+  async getQuotations(params = {}, options = {}) {
     let endpoint = '/quotations';
     const queryParts = [];
     if (params.status) queryParts.push(`status=${encodeURIComponent(params.status)}`);
     if (params.leadId) queryParts.push(`leadId=${encodeURIComponent(params.leadId)}`);
     if (queryParts.length > 0) endpoint += `?${queryParts.join('&')}`;
-    return this.request(endpoint);
+    return this.request(endpoint, options);
   }
 
   /**
    * Fetch quotation metrics via GET /quotations/stats
    */
-  async getQuotationStats() {
-    return this.request('/quotations/stats');
+  async getQuotationStats(options = {}) {
+    return this.request('/quotations/stats', options);
   }
 
   /**
    * Fetch quotation templates via GET /quotations/templates
    */
-  async getQuotationTemplates() {
-    return this.request('/quotations/templates');
+  async getQuotationTemplates(options = {}) {
+    return this.request('/quotations/templates', options);
   }
 
   /**
    * Fetch single quotation by ID via GET /quotations/:id
    */
-  async getQuotationById(id) {
-    return this.request(`/quotations/${id}`);
+  async getQuotationById(id, options = {}) {
+    return this.request(`/quotations/${id}`, options);
   }
 
   // ==========================================
@@ -1024,27 +1028,27 @@ class CrmApiService {
   /**
    * Fetch call records via GET /calls
    */
-  async getCalls(params = {}) {
+  async getCalls(params = {}, options = {}) {
     let endpoint = '/calls';
     const queryParts = [];
     if (params.page) queryParts.push(`page=${encodeURIComponent(params.page)}`);
     if (params.limit) queryParts.push(`limit=${encodeURIComponent(params.limit)}`);
     if (queryParts.length > 0) endpoint += `?${queryParts.join('&')}`;
-    return this.request(endpoint);
+    return this.request(endpoint, options);
   }
 
   /**
    * Fetch call analytics via GET /calls/stats
    */
-  async getCallStats() {
-    return this.request('/calls/stats');
+  async getCallStats(options = {}) {
+    return this.request('/calls/stats', options);
   }
 
   /**
    * Fetch upcoming scheduled calls via GET /calls/scheduled
    */
-  async getScheduledCalls() {
-    return this.request('/calls/scheduled');
+  async getScheduledCalls(options = {}) {
+    return this.request('/calls/scheduled', options);
   }
 
   // ==========================================
@@ -1054,15 +1058,15 @@ class CrmApiService {
   /**
    * Fetch marketing campaigns via GET /campaigns
    */
-  async getCampaigns() {
-    return this.request('/campaigns');
+  async getCampaigns(options = {}) {
+    return this.request('/campaigns', options);
   }
 
   /**
    * Fetch single campaign details via GET /campaigns/:id
    */
-  async getCampaignById(id) {
-    return this.request(`/campaigns/${id}`);
+  async getCampaignById(id, options = {}) {
+    return this.request(`/campaigns/${id}`, options);
   }
 
   // ==========================================
@@ -1072,13 +1076,13 @@ class CrmApiService {
   /**
    * Fetch live activity feed via GET /activities
    */
-  async getActivities(params = {}) {
+  async getActivities(params = {}, options = {}) {
     let endpoint = '/activities';
     const queryParts = [];
     if (params.limit) queryParts.push(`limit=${encodeURIComponent(params.limit)}`);
     if (params.type) queryParts.push(`type=${encodeURIComponent(params.type)}`);
     if (queryParts.length > 0) endpoint += `?${queryParts.join('&')}`;
-    return this.request(endpoint);
+    return this.request(endpoint, options);
   }
 
   // ==========================================
@@ -1088,8 +1092,8 @@ class CrmApiService {
   /**
    * Fetch high-level executive reports via GET /reports/summary
    */
-  async getReportsSummary() {
-    return this.request('/reports/summary');
+  async getReportsSummary(options = {}) {
+    return this.request('/reports/summary', options);
   }
 
   /**

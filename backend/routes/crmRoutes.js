@@ -57,6 +57,9 @@ router.post('/sync-organization/:id', requirePermission('organizations.update'),
 router.get('/leads', requirePermission('organizations.view'), crmController.getLeads);
 router.get('/leads/stats', requirePermission('dashboard.view'), crmController.getLeadStats);
 router.get('/leads/:id', requirePermission('organizations.view'), crmController.getLeadById);
+router.post('/leads', requirePermission('organizations.create'), crmController.createLead);
+router.patch('/leads/:id', requirePermission('organizations.update'), crmController.updateLead);
+router.delete('/leads/:id', requirePermission('organizations.delete'), crmController.deleteLead);
 
 // Pipeline Stages & Fields Configuration
 router.get('/pipeline-stages', requirePermission('settings.view'), crmController.getPipelineStages);

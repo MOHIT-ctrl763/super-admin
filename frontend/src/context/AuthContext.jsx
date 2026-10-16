@@ -108,12 +108,57 @@ export function AuthProvider({ children }) {
     return false;
   }, [user]);
 
+  const isSuperAdmin = !!(
+    user?.isSuperAdmin === true ||
+    user?.role_name === 'SUPER_ADMIN' ||
+    user?.role === 'super_admin' ||
+    (Array.isArray(user?.roles) && user.roles.some(r => r.slug === 'super_admin'))
+  );
+
+  const isFinanceRole = !!(
+    user?.role_name === 'FINANCE_ROLE' ||
+    user?.role_name === 'FINANCE' ||
+    user?.role === 'finance_role' ||
+    user?.role === 'finance_admin' ||
+    (Array.isArray(user?.roles) && user.roles.some(r => r.slug === 'finance_role' || r.slug === 'finance_admin'))
+  );
+
+  const isSupportRole = !!(
+    user?.role_name === 'SUPPORT_ROLE' ||
+    user?.role_name === 'SUPPORT' ||
+    user?.role === 'support_role' ||
+    user?.role === 'support_admin' ||
+    (Array.isArray(user?.roles) && user.roles.some(r => r.slug === 'support_role' || r.slug === 'support_admin'))
+  );
+
+  const isSalesRole = !!(
+    user?.role_name === 'SALES_ROLE' ||
+    user?.role_name === 'SALES' ||
+    user?.role === 'sales_role' ||
+    user?.role === 'sales_admin' ||
+    (Array.isArray(user?.roles) && user.roles.some(r => r.slug === 'sales_role' || r.slug === 'sales_admin'))
+  );
+
+  const isPlatformUser = !!(
+    isSuperAdmin ||
+    isFinanceRole ||
+    isSupportRole ||
+    isSalesRole ||
+    user?.isPlatformUser === true ||
+    !user?.organizationId
+  );
+
   return (
     <AuthContext.Provider
       value={{
         user,
         token,
         isAuthenticated: !!token && !!user,
+        isSuperAdmin,
+        isFinanceRole,
+        isSupportRole,
+        isSalesRole,
+        isPlatformUser,
         isLoading,
         login,
         logout,

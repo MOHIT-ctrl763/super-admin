@@ -14,23 +14,37 @@ exports.globalSearch = async (req, res) => {
       });
     }
 
-    const searchTerm = `%${q}%`;
+    const isSuperAdmin = req.user?.isSuperAdmin === true;
+    const orgId = req.user?.organization_id || 0;
+    const compId = req.user?.crm_company_id || '0';
 
     // 1. Search Organizations
-    const orgsRes = await query(`
+    let orgsQuery = `
       SELECT id, name, slug, email, status, plan_name 
       FROM organizations 
-      WHERE name ILIKE $1 OR slug ILIKE $1 OR email ILIKE $1 OR owner_name ILIKE $1
-      ORDER BY id DESC LIMIT 5
-    `, [searchTerm]);
+      WHERE (name ILIKE $1 OR slug ILIKE $1 OR email ILIKE $1 OR owner_name ILIKE $1)
+    `;
+    const orgsParams = [searchTerm];
+    if (!isSuperAdmin) {
+      orgsQuery += ` AND id = $2`;
+      orgsParams.push(orgId);
+    }
+    orgsQuery += ` ORDER BY id DESC LIMIT 5`;
+    const orgsRes = await query(orgsQuery, orgsParams);
 
     // 2. Search Users
-    const usersRes = await query(`
+    let usersQuery = `
       SELECT id, name, email, role_name, is_active, organization_id
       FROM users 
-      WHERE name ILIKE $1 OR email ILIKE $1
-      ORDER BY id DESC LIMIT 5
-    `, [searchTerm]);
+      WHERE (name ILIKE $1 OR email ILIKE $1)
+    `;
+    const usersParams = [searchTerm];
+    if (!isSuperAdmin) {
+      usersQuery += ` AND (organization_id = $2 OR crm_company_id = $3)`;
+      usersParams.push(orgId, compId);
+    }
+    usersQuery += ` ORDER BY id DESC LIMIT 5`;
+    const usersRes = await query(usersQuery, usersParams);
 
     // 3. Search Plans
     const plansRes = await query(`

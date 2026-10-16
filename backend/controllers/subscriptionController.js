@@ -35,6 +35,15 @@ exports.getSubscriptions = async (req, res) => {
       pIdx++;
     }
 
+    // Tenant isolation: Non-SuperAdmin only sees their own organization's subscriptions
+    if (!req.user?.isSuperAdmin) {
+      const orgId = req.user?.organization_id || 0;
+      sql += ` AND s.organization_id = $${pIdx}`;
+      countSql += ` AND s.organization_id = $${pIdx}`;
+      params.push(orgId);
+      pIdx++;
+    }
+
     if (search) {
       sql += ` AND (s.organization_name ILIKE $${pIdx} OR s.plan_name ILIKE $${pIdx} OR o.email ILIKE $${pIdx})`;
       countSql += ` AND (s.organization_name ILIKE $${pIdx} OR s.plan_name ILIKE $${pIdx} OR o.email ILIKE $${pIdx})`;
@@ -97,12 +106,35 @@ exports.createSubscription = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Plan is required' });
     }
 
-    // Lookup organization
-    const orgRes = await query('SELECT id, name, email FROM organizations WHERE id = $1', [organization_id]);
-    if (orgRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Organization not found' });
+    // Lookup organization by numeric ID or crm_company_id (UUID)
+    let org = null;
+    const isNumeric = !isNaN(parseInt(organization_id, 10)) && /^\d+$/.test(String(organization_id));
+    if (isNumeric) {
+      const orgRes = await query('SELECT id, name, email, crm_company_id FROM organizations WHERE id = $1', [parseInt(organization_id, 10)]);
+      if (orgRes.rows.length > 0) org = orgRes.rows[0];
     }
-    const org = orgRes.rows[0];
+    if (!org) {
+      const orgByCrm = await query('SELECT id, name, email, crm_company_id FROM organizations WHERE crm_company_id = $1', [String(organization_id)]);
+      if (orgByCrm.rows.length > 0) org = orgByCrm.rows[0];
+    }
+    if (!org) {
+      // Check in crm_companies and auto-link
+      const crmRes = await query('SELECT id, name, email, phone FROM crm_companies WHERE id::text = $1', [String(organization_id)]);
+      if (crmRes.rows.length > 0) {
+        const crmComp = crmRes.rows[0];
+        const slug = (crmComp.name || 'company').toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').slice(0, 40) + '-' + Math.floor(1000 + Math.random() * 9000);
+        const ins = await query(`
+          INSERT INTO organizations (name, slug, email, phone, status, plan_id, plan_name, owner_name, users_count, crm_company_id)
+          VALUES ($1, $2, $3, $4, 'ACTIVE', $5, 'Standard', $6, 1, $7)
+          RETURNING id, name, email, crm_company_id
+        `, [crmComp.name, slug, crmComp.email || '', crmComp.phone || '', plan_id, crmComp.name + ' Admin', String(crmComp.id)]);
+        org = ins.rows[0];
+      }
+    }
+
+    if (!org) {
+      return res.status(404).json({ success: false, message: 'Organization or CRM Company not found' });
+    }
 
     // Lookup plan
     const planRes = await query('SELECT * FROM saas_plans WHERE id = $1', [plan_id]);
@@ -157,6 +189,15 @@ exports.createSubscription = async (req, res) => {
       SET plan_id = $1, plan_name = $2, status = $3 
       WHERE id = $4
     `, [plan.id, plan.name, subStatus === 'ACTIVE' ? 'ACTIVE' : 'TRIAL', org.id]);
+
+    // Also update CRM companies ledger if mapped
+    if (org.crm_company_id) {
+      await query(`
+        UPDATE crm_companies
+        SET plan_id = $1, plan_name = $2, status = $3, updated_at = NOW()
+        WHERE id::text = $4
+      `, [plan.id, plan.name, subStatus === 'ACTIVE' ? 'ACTIVE' : 'TRIAL', org.crm_company_id]);
+    }
 
     // Determine payment status (if TRIAL, default to PENDING; if ACTIVE, default to SUCCESS)
     let effectivePaymentStatus = payment_status;
@@ -233,6 +274,10 @@ exports.extendSubscription = async (req, res) => {
     const subRes = await query('SELECT * FROM saas_subscriptions WHERE id = $1', [req.params.id]);
     if (subRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Subscription not found' });
 
+    if (!req.user?.isSuperAdmin && String(subRes.rows[0].organization_id) !== String(req.user?.organization_id)) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Access denied to other organization subscriptions.' });
+    }
+
     await query(`
       UPDATE saas_subscriptions 
       SET current_period_end = COALESCE(current_period_end, CURRENT_TIMESTAMP) + ($1 || ' days')::interval, status = 'ACTIVE'
@@ -257,6 +302,10 @@ exports.cancelSubscription = async (req, res) => {
     if (subRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Subscription not found' });
 
     const sub = subRes.rows[0];
+    if (!req.user?.isSuperAdmin && String(sub.organization_id) !== String(req.user?.organization_id)) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Access denied to other organization subscriptions.' });
+    }
+
     const cancelReasonText = (reason || 'Admin request').trim();
     const feedbackText = (feedback || '').trim();
 
