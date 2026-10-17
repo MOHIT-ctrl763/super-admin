@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
+      options: '-c search_path=superadmin,public',
       ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
       max: 20,
       idleTimeoutMillis: 30000,
@@ -14,7 +15,8 @@ const poolConfig = process.env.DATABASE_URL
       port: parseInt(process.env.DB_PORT, 10) || 5432,
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || '798214',
-      database: process.env.DB_NAME || 'superadmin_db',
+      database: process.env.DB_NAME || 'CRM',
+      options: '-c search_path=superadmin,public',
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
@@ -34,7 +36,10 @@ async function query(text, params) {
 }
 
 async function initSchema() {
-  console.log('🔄 Initializing PostgreSQL Schema for superadmin_db...');
+  console.log(`🔄 Initializing PostgreSQL Schema for ${process.env.DB_NAME || 'CRM'} (superadmin schema)...`);
+
+  await query('CREATE SCHEMA IF NOT EXISTS superadmin;');
+  await query('SET search_path TO superadmin, public;');
 
   await query(`
     CREATE TABLE IF NOT EXISTS users (
