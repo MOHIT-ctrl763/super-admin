@@ -308,11 +308,39 @@ async function initSchema() {
     );
   `);
 
+  await initCrmSchema();
   await seedData();
   await seedCrmLedger();
   const { seedRBAC } = require('../services/rbacService');
   await seedRBAC();
   console.log('✅ PostgreSQL Schema & Seed Data ready in superadmin_db!');
+}
+
+async function initCrmSchema() {
+  try {
+    const compCheck = await query(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'companies'
+      );
+    `);
+    if (!compCheck.rows[0].exists) {
+      console.log('🔄 Initializing CRM public schema tables...');
+      const fs = require('fs');
+      const path = require('path');
+      const schemaPath = path.join(__dirname, 'crm_schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        const raw = fs.readFileSync(schemaPath, 'utf8');
+        const cleanSql = raw.split('\n').filter(l => !l.trim().startsWith('\\')).join('\n');
+        await query(`SET search_path TO public; ${cleanSql}; SET search_path TO superadmin, public;`);
+        console.log('✅ CRM public schema initialized successfully in database!');
+      }
+    } else {
+      console.log('✅ CRM public schema (companies, leads, etc.) already active.');
+    }
+  } catch (err) {
+    console.error('⚠️ [CRM_SCHEMA_INIT_WARN]', err.message);
+  }
 }
 
 async function seedData() {

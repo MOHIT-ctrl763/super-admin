@@ -60,13 +60,10 @@ async function provisionTenantInCrm({
       updated_at = NOW()
   `, [compId, name, cleanEmail, phone || '', address || '', state || 'Maharashtra', stateCode || '27', planId, planName]);
 
-  // 2. Provision in actual CRM database
-  let crmClient = null;
+  // 2. Provision in actual CRM database (public schema)
   try {
-    crmClient = await getCrmClient();
-
     // Ensure company exists in CRM.companies
-    await crmClient.query(`
+    await query(`
       INSERT INTO public.companies (
         id, name, email, phone, address, state_code, financial_year_start, created_at, updated_at
       )
@@ -79,16 +76,16 @@ async function provisionTenantInCrm({
     `, [compId, name, cleanEmail, phone || '', address || '', stateCode || '27', '2026-04-01']);
 
     // Ensure administrator user exists in CRM.users
-    const userCheck = await crmClient.query(`SELECT id FROM public.users WHERE email = $1`, [cleanEmail]);
+    const userCheck = await query(`SELECT id FROM public.users WHERE email = $1`, [cleanEmail]);
     if (userCheck.rows.length === 0) {
-      await crmClient.query(`
+      await query(`
         INSERT INTO public.users (
           company_id, name, email, password_hash, role, is_active, created_at, updated_at
         )
         VALUES ($1, $2, $3, $4, 'owner_/_ceo', true, NOW(), NOW())
       `, [compId, adminName, cleanEmail, adminPasswordHash || '$2a$10$abcdefghijklmnopqrstuvwxyz1234567890']);
     } else {
-      await crmClient.query(`
+      await query(`
         UPDATE public.users 
         SET company_id = $1, is_active = true, updated_at = NOW() 
         WHERE email = $2
@@ -100,10 +97,6 @@ async function provisionTenantInCrm({
   } catch (err) {
     console.error(`[CRM_PROVISION_WARN] Direct CRM DB sync failed (handled gracefully):`, err.message);
     return { success: false, companyId: compId, warning: err.message };
-  } finally {
-    if (crmClient) {
-      try { await crmClient.end(); } catch (e) {}
-    }
   }
 }
 

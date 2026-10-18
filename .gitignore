@@ -59,4 +59,6 @@ Thumbs.db
 
 # Local cloned sub-repositories
 CRM/
+CRMsql
+crm_plain.sql
 
