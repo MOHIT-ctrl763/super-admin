@@ -431,6 +431,8 @@ exports.createCompany = async (req, res) => {
     let crmUserToken = null;
     let crmAssignedCompanyId = null;
 
+    const targetCompId = require('crypto').randomUUID();
+
     if (loginEmail) {
       try {
         const crmSignUpRes = await crmApiService.registerTenantUser({
@@ -438,14 +440,16 @@ exports.createCompany = async (req, res) => {
           email: loginEmail,
           password: adminPassword,
           role: 'owner_/_ceo',
-          phone: cleanCompPhone
+          phone: cleanCompPhone,
+          company_id: targetCompId,
+          companyId: targetCompId
         });
 
         if (crmSignUpRes.success && crmSignUpRes.data) {
           crmSynced = true;
           crmUserToken = crmSignUpRes.data.accessToken;
-          crmAssignedCompanyId = crmSignUpRes.data.user?.companyId || crmSignUpRes.data.user?.company_id || null;
-          console.log(`✅ [CRM_SYNC_SUCCESS] Registered CRM account for ${loginEmail} in NexFlow CRM`);
+          crmAssignedCompanyId = crmSignUpRes.data.user?.companyId || crmSignUpRes.data.user?.company_id || targetCompId;
+          console.log(`✅ [CRM_SYNC_SUCCESS] Registered CRM account for ${loginEmail} in NexFlow CRM with company ${crmAssignedCompanyId}`);
 
           // Attach company details via CRM /company endpoint with this user's token
           if (crmUserToken) {
